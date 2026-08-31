@@ -1,1 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cove Portal</title>
+  <link rel="stylesheet" href="css/portal.css" />
+</head>
+<body>
+  <aside class="side">
+    <a class="brand" href="../index.html"><span class="mark"></span>Cove</a>
+    <button class="nav-btn active" data-view="shared">Shared dashboard</button>
+    <button class="nav-btn" data-view="personal">Personal</button>
+    <button class="nav-btn" data-view="transactions">Transactions</button>
+    <button class="nav-btn" data-view="monthly">Monthly expenses</button>
+    <button class="nav-btn" data-view="calendar">Due dates</button>
+    <button class="nav-btn" data-view="accounts">Accounts</button>
+    <button class="nav-btn" data-view="debts">Debts</button>
+    <button class="nav-btn" data-view="financials">Financials</button>
+    <button class="nav-btn" data-view="settings">Settings</button>
+    <div class="side-foot">Prototype · no live banks</div>
+  </aside>
 
+  <section class="main">
+    <header class="top">
+      <div>
+        <div class="kicker" id="modeLabel">Couple household</div>
+        <strong id="headerTitle">Month</strong>
+        <input id="monthPick" type="month" />
+      </div>
+      <div class="who">
+        <label class="note">Viewing as</label>
+        <select id="userSelect">
+          <option value="alex">Him</option>
+          <option value="jordan">Her</option>
+          <option value="solo">Solo (individual)</option>
+        </select>
+        <button class="btn" id="menuBtn" type="button">Menu</button>
+      </div>
+    </header>
+    <div class="content" id="app"></div>
+  </section>
+
+  <div class="modal-bg" id="modal">
+    <div class="modal">
+      <h2>Add transaction</h2>
+      <div class="fields">
+        <label>Name<input id="fName" placeholder="Groceries, rent..." /></label>
+        <label>Amount<input id="fAmt" type="number" step="0.01" placeholder="0.00" /></label>
+        <label>Date<input id="fDate" type="date" /></label>
+        <label>Due date (optional)<input id="fDue" type="date" /></label>
+        <label>Category
+          <select id="fCat">
+            <option>Groceries</option><option>Rent</option><option>Eating out</option>
+            <option>Utilities</option><option>Transport</option><option>Subscriptions</option>
+            <option>Fun</option><option>Health</option><option>Other</option>
+          </select>
+        </label>
+        <label>Type
+          <select id="fType"><option value="shared">Shared</option><option value="personal">Personal</option></select>
+        </label>
+        <label>Who paid
+          <select id="fPayer"><option value="alex">Him</option><option value="jordan">Her</option><option value="both">Joint</option></select>
+        </label>
+        <label>Split % for the other person<input id="fSplit" type="number" value="50" min="0" max="100" /></label>
+        <label>Paid?
+          <select id="fPaid"><option value="yes">Paid</option><option value="no">Unpaid</option></select>
+        </label>
+        <label>Account
+          <select id="fAcct"></select>
+        </label>
+        <label>Notes<textarea id="fNotes" rows="2"></textarea></label>
+      </div>
+      <div class="row-actions">
+        <button class="btn primary" id="saveTx">Save</button>
+        <button class="btn" id="cancelTx">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="shareModal">
+    <div class="modal">
+      <h2>Add monthly expense</h2>
+      <div class="fields">
+        <label>Expense name<input id="sName" placeholder="Rent, electric, groceries..." /></label>
+        <label>Amount<input id="sAmt" type="number" step="0.01" placeholder="0.00" /></label>
+        <label>Due date<input id="sDue" type="date" /></label>
+        <label>How it's covered
+          <select id="sMode">
+            <option value="split">Split it</option>
+            <option value="assigned">One person pays this bill</option>
+          </select>
+        </label>
+        <label id="sPayerLabel">Who paid
+          <select id="sPayer"><option value="alex">Him</option><option value="jordan">Her</option><option value="both">Joint</option></select>
+        </label>
+        <label id="sSplitWrap">Their split % (other person)<input id="sSplit" type="number" value="50" min="0" max="100" /></label>
+        <label>Category
+          <select id="sCat">
+            <option>Rent</option><option>Utilities</option><option>Groceries</option>
+            <option>Eating out</option><option>Subscriptions</option><option>Health</option>
+            <option>Transport</option><option>Other</option>
+          </select>
+        </label>
+        <label>Paid?
+          <select id="sPaid"><option value="no">Unpaid</option><option value="yes">Paid</option></select>
+        </label>
+        <label>Household or personal
+          <select id="sType"><option value="shared">Shared household</option><option value="personal">Personal</option></select>
+        </label>
+        <label>Notes<textarea id="sNotes" rows="2"></textarea></label>
+      </div>
+      <div class="row-actions">
+        <button class="btn primary" id="saveShare">Save</button>
+        <button class="btn" id="cancelShare">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="js/portal.js"></script>
+</body>
+</html>
