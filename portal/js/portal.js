@@ -125,7 +125,79 @@ function applyState(next) {
   if (!state.debts) state.debts = [];
   if (!state.income) state.income = [];
   if (!state.txs) state.txs = [];
+  if (!state.snapshots) state.snapshots = {};
+  bootMonths();
   localStorage.setItem(KEY, JSON.stringify(state));
+}
+
+function shiftMonth(ym, delta) {
+  const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + delta, 1);
+  return monthKey(d);
+}
+function cloneBooksFrom(src) {
+  return {
+    monthly: structuredClone(src.monthly || []),
+    debts: structuredClone(src.debts || []),
+    income: structuredClone(src.income || []),
+    accounts: structuredClone(src.accounts || []),
+    extraLog: structuredClone(src.extraLog || []),
+    settled: src.settled || 0,
+    closedAt: new Date().toISOString()
+  };
+}
+function resetPaidFlags() {
+  (state.monthly || []).forEach(m => {
+    m.paid = false;
+    if (m.paidBy) m.paidBy = { alex: false, jordan: false };
+  });
+  (state.debts || []).forEach(d => { d.minPaid = false; });
+}
+function bootMonths() {
+  if (!state.snapshots) state.snapshots = {};
+  const now = monthKey();
+  const hasStuff = ((state.monthly || []).length + (state.debts || []).length + (state.income || []).length) > 0;
+  if (!state.liveMonth) {
+    if (hasStuff) {
+      const prev = shiftMonth(now, -1);
+      state.liveMonth = prev;
+      if (!state.snapshots[prev]) state.snapshots[prev] = cloneBooksFrom(state);
+      resetPaidFlags();
+      state.liveMonth = now;
+    } else {
+      state.liveMonth = now;
+    }
+    return;
+  }
+  if (now > state.liveMonth) {
+    if (!state.snapshots[state.liveMonth]) state.snapshots[state.liveMonth] = cloneBooksFrom(state);
+    resetPaidFlags();
+    state.liveMonth = now;
+  }
+}
+function viewingClosed() {
+  return !!(state.liveMonth && viewMonth !== state.liveMonth && state.snapshots && state.snapshots[viewMonth]);
+}
+function bag() {
+  if (viewingClosed()) return state.snapshots[viewMonth];
+  return state;
+}
+function closeAndRoll(target) {
+  if (!state.liveMonth) state.liveMonth = monthKey();
+  if (target > state.liveMonth) {
+    if (!state.snapshots[state.liveMonth]) state.snapshots[state.liveMonth] = cloneBooksFrom(state);
+    resetPaidFlags();
+    state.liveMonth = target;
+  }
+}
+function monthBanner() {
+  if (!state.liveMonth) return "";
+  if (viewMonth === state.liveMonth) {
+    return `<p class="note">Live month · ${viewMonthLabel()}. Closed months stay in Financials and the month picker.</p>`;
+  }
+  if (state.snapshots[viewMonth]) {
+    return `<p class="note">Viewing closed ${viewMonthLabel()}. Live month is ${state.liveMonth}. Edits here stay on this snapshot.</p>`;
+  }
+  return `<p class="note">No snapshot for ${viewMonthLabel()} yet. Showing live books.</p>`;
 }
 
 async function pushCloud() {
@@ -212,6 +284,9 @@ let state = load();
 if (!state.extraLog) state.extraLog = [];
 if (!state.goals) state.goals = [];
 if (!state.budgets) state.budgets = [];
+if (!state.snapshots) state.snapshots = {};
+bootMonths();
+save();
 let user = "alex";
 let view = "dashboard";
 let expenseFilter = "all";
@@ -277,8 +352,9 @@ function spent(cat, scope) {
 }
 
 function visibleAccounts() {
-  if (user === "solo") return state.accounts.filter(a => a.owner === "alex" || a.shared);
-  return state.accounts.filter(a => {
+  const list = bag().accounts || [];
+  if (user === "solo") return list.filter(a => a.owner === "alex" || a.shared);
+  return list.filter(a => {
     if (a.shared) return true;
     if (a.owner === user) return true;
     if (a.hidden) return false;
@@ -440,12 +516,12 @@ function dashboard() {
       <button class="btn ${dashMode==="household"?"active":""}" data-dashmode="household">Household</button>
       <button class="btn ${dashMode==="personal"?"active":""}" data-dashmode="personal">Personal</button>
     </div>`;
-  if (dashMode === "household" && user !== "solo") return tabs + shared();
-  return tabs + personal();
+  if (dashMode === "household" && user !== "solo") return tabs + monthBanner() + shared();
+  return tabs + monthBanner() + personal();
 }
 
 function shared() {
-  const house = (state.monthly || []).filter(m => m.owner === "both" || m.payer === "both");
+  const house = (bag().monthly || []).filter(m => m.owner === "both" || m.payer === "both");
   const spentThis = house.reduce((s, m) => s + m.amount, 0);
   const unpaid = house.filter(m => !monthPaidFor(m));
   const unpaidSum = unpaid.reduce((s, m) => s + monthShare(m), 0);
@@ -527,11 +603,11 @@ function shared() {
 function accountFor(item) {
   // PLAID_TODO: live funding account + merchant logo from Plaid
   if (item && item.accountId) {
-    const hit = (state.accounts || []).find(a => a.id === item.accountId);
+    const hit = (bag().accounts || []).find(a => a.id === item.accountId);
     if (hit) return hit;
   }
   const who = item && (item.owner === "both" || item.payer === "both") ? "both" : (item && (item.owner || item.payer));
-  return (state.accounts || []).find(a => a.owner === who) || (state.accounts || [])[0] || null;
+  return (bag().accounts || []).find(a => a.owner === who) || (bag().accounts || [])[0] || null;
 }
 function accountLine(item) {
   // PLAID_TODO: last-4 and bank name from live Plaid account
@@ -576,7 +652,7 @@ function personalFeed(who) {
     outRows.push({ name: d.name, days, amount: Number(d.minimum), account: accountLine(d), pending: false });
   });
   outRows.sort((a, b) => a.days - b.days);
-  const inRows = (state.income || []).filter(i => i.owner === who || i.owner === "both").map(i => {
+  const inRows = (bag().income || []).filter(i => i.owner === who || i.owner === "both").map(i => {
     const due = dueOnViewMonth(i.due || "01");
     return { name: i.name, days: daysUntil(due), amount: Number(i.amount || 0), account: accountLine(i), pending: false };
   }).sort((a, b) => a.days - b.days);
@@ -679,7 +755,7 @@ function personal() {
   const mineLast = mineAll.filter(t => inPeriod(t, "last"));
   const spendThis = mineThis.reduce((s, t) => s + t.amount, 0);
   const spendLast = mineLast.reduce((s, t) => s + t.amount, 0);
-  const myMonthly = (state.monthly || []).filter(m => m.owner === who && !m.paid);
+  const myMonthly = (bag().monthly || []).filter(m => m.owner === who && !monthPaidFor(m, who));
   const myUnpaidTx = mineAll.filter(t => !t.paid);
   const unpaidItems = [
     ...myMonthly.map(m => ({ name: m.name, amount: m.amount, due: m.due })),
@@ -694,12 +770,12 @@ function personal() {
   const sharedThisList = sharedTxs().filter(t => inPeriod(t, "this"));
   const sharedThis = sharedThisList.reduce((s, t) => s + t.amount, 0);
   const myShare = sharedThisList.reduce((s, t) => s + personShare(t, who), 0);
-  const hiddenN = state.accounts.filter(a => a.hidden && a.owner === who).length;
+  const hiddenN = (bag().accounts || []).filter(a => a.hidden && a.owner === who).length;
   const goal = (state.goals || []).find(g => g.scope === "personal" && (!g.owner || g.owner === who))
     || (state.goals || []).find(g => g.scope === "personal");
   const topCat = groupSum(mineThis, t => t.cat)[0];
   const topLast = topCat ? catSpend("last", topCat[0]) : 0;
-  const myInc = (state.income || []).filter(i => i.owner === who).reduce((s, i) => s + i.amount, 0);
+  const myInc = (bag().income || []).filter(i => i.owner === who).reduce((s, i) => s + i.amount, 0);
   const leftMonth = myInc - spendThis;
   const feed = personalFeed(who);
 
@@ -1031,9 +1107,9 @@ function budgets() {
 }
 
 function visibleMonthly() {
-  if (!state.monthly) return [];
-  if (user === "solo") return state.monthly.filter(m => m.owner === "alex" || m.owner === "both");
-  return state.monthly.filter(m => m.owner === "both" || m.owner === user || m.payer === user);
+  const list = bag().monthly || [];
+  if (user === "solo") return list.filter(m => m.owner === "alex" || m.owner === "both");
+  return list.filter(m => m.owner === "both" || m.owner === user || m.payer === user);
 }
 
 function isJointBill(m) {
@@ -1642,9 +1718,9 @@ function monthly() {
 }
 
 function visibleDebts() {
-  if (!state.debts) return [];
-  if (user === "solo") return state.debts.filter(d => d.owner === "alex" || d.owner === "both");
-  return state.debts.filter(d => d.owner === "both" || d.owner === user);
+  const list = bag().debts || [];
+  if (user === "solo") return list.filter(d => d.owner === "alex" || d.owner === "both");
+  return list.filter(d => d.owner === "both" || d.owner === user);
 }
 
 function defaultApr(type) {
@@ -1921,7 +1997,7 @@ function debts() {
 }
 
 function finIncome(scope) {
-  return (state.income || []).filter(i => {
+  return (bag().income || []).filter(i => {
     if (scope === "household") return true;
     if (user === "solo") return i.owner === "alex";
     return i.owner === user;
@@ -1969,6 +2045,7 @@ function financials() {
   const monthlyOut = visibleMonthly().filter(m => finScope === "household" ? true : (user === "solo" ? m.owner === "alex" : m.owner === user || m.type === "shared" && finScope === "household")).reduce((s, m) => s + m.amount, 0);
 
   const tabs = `
+    ${monthBanner()}
     <div class="row-actions">
       <button class="btn ${finScope==="household"?"active":""}" data-finscope="household">Household</button>
       <button class="btn ${finScope==="personal"?"active":""}" data-finscope="personal">Personal</button>
@@ -2271,7 +2348,7 @@ function bindView() {
     const [src, id] = el.dataset.delShare.split(":");
     if (!confirm("Delete this shared expense?")) return;
     if (src === "tx") state.txs = state.txs.filter(t => String(t.id) !== String(id));
-    if (src === "month") state.monthly = state.monthly.filter(m => String(m.id) !== String(id));
+    if (src === "month") bag().monthly = (bag().monthly || []).filter(m => String(m.id) !== String(id));
     save();
     render();
   });
@@ -2280,7 +2357,7 @@ function bindView() {
     if (t) { t.paid = !t.paid; save(); render(); }
   });
   app.querySelectorAll("[data-hide]").forEach(el => el.onclick = () => {
-    const a = state.accounts.find(x => x.id === el.dataset.hide);
+    const a = (bag().accounts || []).find(x => x.id === el.dataset.hide);
     if (a) { a.hidden = !a.hidden; save(); render(); }
   });
   app.querySelectorAll("[data-month]").forEach(el => el.onclick = () => {
@@ -2360,20 +2437,20 @@ function bindView() {
     render();
   });
   app.querySelectorAll("[data-debt-min-paid]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.debtMinPaid);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.debtMinPaid);
     if (d) { d.minPaid = !d.minPaid; save(); render(); }
   });
   app.querySelectorAll("[data-set-extra-mo]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.setExtraMo);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.setExtraMo);
     const input = app.querySelector(`[data-extra-mo="${el.dataset.setExtraMo}"]`);
     if (d && input) { d.extra = Math.max(0, Number(input.value || 0)); save(); render(); }
   });
   app.querySelectorAll("[data-month-paid]").forEach(el => el.onclick = () => {
-    const m = state.monthly.find(x => x.id === el.dataset.monthPaid);
+    const m = (bag().monthly || []).find(x => x.id === el.dataset.monthPaid);
     if (m) { toggleMonthPaid(m); save(); render(); }
   });
   const patchDebt = (id, fn) => {
-    const d = state.debts.find(x => String(x.id) === String(id));
+    const d = (bag().debts || []).find(x => String(x.id) === String(id));
     if (!d) return;
     fn(d);
     save();
@@ -2395,17 +2472,17 @@ function bindView() {
     patchDebt(el.dataset.debtApr, d => { d.apr = Math.max(0, Number(el.value || 0)); });
   });
   app.querySelectorAll("[data-set-min]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.setMin);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.setMin);
     const input = app.querySelector(`[data-min-input="${el.dataset.setMin}"]`);
     if (d && input) { d.minimum = Math.max(0, Number(input.value || 0)); save(); render(); }
   });
   app.querySelectorAll("[data-set-extra]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.setExtra);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.setExtra);
     const input = app.querySelector(`[data-extra-input="${el.dataset.setExtra}"]`);
     if (d && input) { d.extra = Math.max(0, Number(input.value || 0)); save(); render(); }
   });
   app.querySelectorAll("[data-clear-extra]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.clearExtra);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.clearExtra);
     if (d) { d.extra = 0; save(); render(); }
   });
   app.querySelectorAll("[data-rec]").forEach(el => el.onclick = () => {
@@ -2413,7 +2490,7 @@ function bindView() {
     if (pop) pop.classList.toggle("open");
   });
   app.querySelectorAll("[data-pay]").forEach(el => el.onclick = () => {
-    const d = state.debts.find(x => x.id === el.dataset.pay);
+    const d = (bag().debts || []).find(x => x.id === el.dataset.pay);
     if (d && Number(d.extra) > 0) {
       const amt = Number(d.extra);
       d.balance = Math.max(0, Number(d.balance) - amt);
@@ -2481,17 +2558,18 @@ function bindView() {
       owner: user === "solo" ? "alex" : user
     };
     if (monthEdit) {
-      const m = state.monthly.find(x => x.id === monthEdit);
+      const m = (bag().monthly || []).find(x => x.id === monthEdit);
       if (m) Object.assign(m, row);
       monthEdit = null;
     } else {
-      state.monthly.push({ id: "m" + Date.now(), ...row });
+      if (!bag().monthly) bag().monthly = [];
+      bag().monthly.push({ id: "m" + Date.now(), ...row });
     }
     save();
     render();
   };
   app.querySelectorAll("[data-edit-month]").forEach(el => el.onclick = () => {
-    const m = state.monthly.find(x => x.id === el.dataset.editMonth);
+    const m = (bag().monthly || []).find(x => x.id === el.dataset.editMonth);
     if (!m) return;
     openShareForm({
       src: "month",
@@ -2508,7 +2586,7 @@ function bindView() {
   });
   app.querySelectorAll("[data-del-month]").forEach(el => el.onclick = () => {
     if (!confirm("Delete this monthly expense?")) return;
-    state.monthly = state.monthly.filter(x => x.id !== el.dataset.delMonth);
+    bag().monthly = (bag().monthly || []).filter(x => x.id !== el.dataset.delMonth);
     save();
     render();
   });
@@ -2663,7 +2741,11 @@ function bindView() {
 
 const monthPickEl = document.getElementById("monthPick");
 if (monthPickEl) monthPickEl.onchange = () => {
-  if (monthPickEl.value) viewMonth = monthPickEl.value;
+  if (monthPickEl.value) {
+    closeAndRoll(monthPickEl.value);
+    viewMonth = monthPickEl.value;
+    save();
+  }
   render();
 };
 
@@ -2815,10 +2897,11 @@ if (shareModal) {
       notes
     };
     if (shareEdit && shareEdit.id) {
-      const m = state.monthly.find(x => String(x.id) === String(shareEdit.id));
+      const m = (bag().monthly || []).find(x => String(x.id) === String(shareEdit.id));
       if (m) Object.assign(m, row);
     } else {
-      state.monthly.push({ id: "m" + Date.now(), ...row });
+      if (!bag().monthly) bag().monthly = [];
+      bag().monthly.push({ id: "m" + Date.now(), ...row });
     }
     save();
     shareEdit = null;
