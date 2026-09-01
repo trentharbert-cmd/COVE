@@ -250,3 +250,32 @@ h1 { font-family: var(--sans); font-size: 28px; font-weight: 600; letter-spacing
 
 .pdash-rail { margin-top: 12px; }
 .pdash-rail .pdash-split { grid-template-columns: 1fr; }
+
+.pdash-board {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.28fr);
+  gap: 12px;
+  align-items: stretch;
+  margin: 0 0 16px;
+}
+.pdash-needs { min-width: 0; overflow: auto; }
+.pdash-quad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+.pdash-quad .pdash-tile {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.pdash-under { display: grid; gap: 12px; max-width: 0.72fr; }
+.pdash-under { width: min(520px, 100%); }
+@media (max-width: 1100px) {
+  .pdash-board { grid-template-columns: 1fr; }
+  .pdash-quad { grid-template-rows: auto; }
+  .pdash-under { width: 100%; }
+}

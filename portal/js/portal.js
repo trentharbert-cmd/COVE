@@ -609,59 +609,56 @@ function personalFeed(who) {
     return `<div class="acct-bar"><div class="legend-row"><span>${a.name}${a.last4 ? " " + a.last4 : ""}</span><strong>${money(bal)}</strong></div><div class="bar"><span style="width:${pct}%"></span></div></div>`;
   }).join("") : `<p class="note">No accounts yet. Looks-only until Plaid.</p>`;
 
-  return `
-    <div class="pdash">
-      <div class="tile pdash-tile">
-        <div class="pdash-head">
-          <div class="label">Upcoming activity</div>
-          <div class="chips">${chip("up","out","Outgoing",pdUp)}${chip("up","in","Incoming",pdUp)}</div>
-        </div>
-        ${upRows}
+  return {
+    upcoming: `<div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div class="label">Upcoming activity</div>
+        <div class="chips">${chip("up","out","Outgoing",pdUp)}${chip("up","in","Incoming",pdUp)}</div>
       </div>
-      <div class="grid-2 pdash-split">
-        <div class="tile pdash-tile">
-          <div class="pdash-head">
-            <div>
-              <div class="label">Subscriptions</div>
-              <div class="val">${heroMoney(subTotal)}</div>
-            </div>
-            <div class="chips">${chip("sub","mo","Monthly",pdSub)}${chip("sub","yr","Annual",pdSub)}</div>
-          </div>
-          ${subHtml}
-          <button class="btn feed-more" data-go="monthly">Show more</button>
+      ${upRows}
+    </div>`,
+    subs: `<div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div>
+          <div class="label">Subscriptions</div>
+          <div class="val">${heroMoney(subTotal)}</div>
         </div>
-        <div class="tile pdash-tile">
-          <div class="pdash-head">
-            <div>
-              <div class="label">Bills</div>
-              <div class="val">${heroMoney(billTotal)}</div>
-            </div>
-            <div class="chips">${chip("bill","mo","Monthly",pdBill)}${chip("bill","yr","Annual",pdBill)}</div>
-          </div>
-          ${billHtml}
-          <button class="btn feed-more" data-go="monthly">Show more</button>
-        </div>
+        <div class="chips">${chip("sub","mo","Monthly",pdSub)}${chip("sub","yr","Annual",pdSub)}</div>
       </div>
-      <div class="tile pdash-tile">
-        <div class="pdash-head">
-          <div class="label">Recent transactions</div>
+      ${subHtml}
+      <button class="btn feed-more" data-go="monthly">Show more</button>
+    </div>`,
+    bills: `<div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div>
+          <div class="label">Bills</div>
+          <div class="val">${heroMoney(billTotal)}</div>
         </div>
-        ${recentHtml}
-        <button class="btn feed-more" data-go="transactions">Show more</button>
-        <p class="note">Merchant logos after Plaid. Account last-4 is looks-only until Plaid.</p>
+        <div class="chips">${chip("bill","mo","Monthly",pdBill)}${chip("bill","yr","Annual",pdBill)}</div>
       </div>
-      <div class="tile pdash-tile">
-        <div class="pdash-head">
-          <div>
-            <div class="label">Accounts</div>
-            <div class="val">${heroMoney(acctTotal)}</div>
-          </div>
-          <div class="chips">${chip("acct","allocation","Allocation",pdAcct)}${chip("acct","breakdown","Breakdown",pdAcct)}</div>
+      ${billHtml}
+      <button class="btn feed-more" data-go="monthly">Show more</button>
+    </div>`,
+    recent: `<div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div class="label">Recent transactions</div>
+      </div>
+      ${recentHtml}
+      <button class="btn feed-more" data-go="transactions">Show more</button>
+      <p class="note">Merchant logos after Plaid. Account last-4 is looks-only until Plaid.</p>
+    </div>`,
+    accounts: `<div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div>
+          <div class="label">Accounts</div>
+          <div class="val">${heroMoney(acctTotal)}</div>
         </div>
-        ${pdAcct === "allocation" ? allocHtml : breakHtml}
-        <p class="note">Balances typed in Accounts. Live balances after Plaid.</p>
+        <div class="chips">${chip("acct","allocation","Allocation",pdAcct)}${chip("acct","breakdown","Breakdown",pdAcct)}</div>
       </div>
-    </div>`;
+      ${pdAcct === "allocation" ? allocHtml : breakHtml}
+      <p class="note">Balances typed in Accounts. Live balances after Plaid.</p>
+    </div>`
+  };
 }
 
 function personal() {
@@ -693,6 +690,7 @@ function personal() {
   const topLast = topCat ? catSpend("last", topCat[0]) : 0;
   const myInc = (state.income || []).filter(i => i.owner === who).reduce((s, i) => s + i.amount, 0);
   const leftMonth = myInc - spendThis;
+  const feed = personalFeed(who);
 
   return `
     <p class="kicker">Personal dashboard</p>
@@ -722,34 +720,40 @@ function personal() {
         <p class="note">Personal bills and open charges</p>
       </div>
     </div>
-    <div class="grid-2">
-      <div class="tile">
+    <div class="pdash-board">
+      <div class="tile pdash-needs">
         <div class="label">Needs attention</div>
         ${unpaidItems.length ? `<table class="table"><thead><tr><th>Item</th><th>Amount</th><th>Due</th></tr></thead><tbody>
           ${unpaidItems.map(x => `<tr><td>${x.name}</td><td>${money(x.amount)}</td><td>${x.due || "—"}</td></tr>`).join("")}
         </tbody></table>` : `<p class="note">Nothing open on your side.</p>`}
       </div>
-      <div>
-        <div class="tile">
-          <div class="label">Your share of household</div>
-          <div class="val">${heroMoney(myShare)}</div>
-          <p class="note">Your piece of shared spend this month (${heroMoney(sharedThis)} household)</p>
-        </div>
-        ${topCat ? `<div class="tile" style="margin-top:12px">
-          <div class="label">${topCat[0]} this month</div>
-          <div class="val">${heroMoney(topCat[1])}</div>
-          <p class="note">${vsLastLine(topCat[1], topLast)}</p>
-        </div>` : ""}
-        ${goal ? `<div class="tile" style="margin-top:12px">
-          <div class="label">Personal goal</div>
-          <h3 style="margin:6px 0">${goal.name}</h3>
-          <div class="val">${heroMoney(goal.saved)}</div>
-          <p class="note">of ${heroMoney(goal.target)}</p>
-          <div class="bar"><span style="width:${Math.min(100, goal.saved / goal.target * 100)}%"></span></div>
-        </div>` : ""}
-        <p class="note" style="margin-top:12px">${hiddenN ? hiddenN + " personal account hidden from partner" : "Personal accounts visible to partner by default"}</p>
-        <div class="pdash-rail">${personalFeed(who)}</div>
+      <div class="pdash-quad">
+        ${feed.upcoming}
+        ${feed.subs}
+        ${feed.bills}
+        ${feed.recent}
       </div>
+    </div>
+    <div class="pdash-under">
+      ${feed.accounts}
+      <div class="tile">
+        <div class="label">Your share of household</div>
+        <div class="val">${heroMoney(myShare)}</div>
+        <p class="note">Your piece of shared spend this month (${heroMoney(sharedThis)} household)</p>
+      </div>
+      ${topCat ? `<div class="tile">
+        <div class="label">${topCat[0]} this month</div>
+        <div class="val">${heroMoney(topCat[1])}</div>
+        <p class="note">${vsLastLine(topCat[1], topLast)}</p>
+      </div>` : ""}
+      ${goal ? `<div class="tile">
+        <div class="label">Personal goal</div>
+        <h3 style="margin:6px 0">${goal.name}</h3>
+        <div class="val">${heroMoney(goal.saved)}</div>
+        <p class="note">of ${heroMoney(goal.target)}</p>
+        <div class="bar"><span style="width:${Math.min(100, goal.saved / goal.target * 100)}%"></span></div>
+      </div>` : ""}
+      <p class="note">${hiddenN ? hiddenN + " personal account hidden from partner" : "Personal accounts visible to partner by default"}</p>
     </div>
   `;
 }
