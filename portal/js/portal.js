@@ -2404,8 +2404,12 @@ function settings() {
         <p><strong id="inviteCodeLabel">${inviteCode || "No code yet — run supabase-setup.sql"}</strong></p>
         <p class="note" id="inviteLinkLabel">${inviteCode ? inviteLink() : ""}</p>
         <div class="row-actions">
-          <button class="btn primary" id="copyInvite" type="button">Copy invite link</button>
-          <a class="btn" id="mailInvite" href="${inviteCode ? "mailto:?subject=" + encodeURIComponent("Join our Cove household") + "&body=" + encodeURIComponent("Create an account and join with this link:\n\n" + inviteLink() + "\n\nCode: " + inviteCode) : "#"}">Email invite</a>
+          <input id="partnerEmail" type="email" placeholder="Partner email" style="min-width:220px" />
+          <button class="btn primary" id="sendInvite" type="button">Send invite</button>
+        </div>
+        <div class="row-actions">
+          <button class="btn" id="copyInvite" type="button">Copy invite link</button>
+          <a class="btn" id="mailInvite" href="${inviteCode ? "mailto:?subject=" + encodeURIComponent("Join our Cove household") + "&body=" + encodeURIComponent("Create an account and join with this link:\n\n" + inviteLink() + "\n\nCode: " + inviteCode) : "#"}">Open in my email</a>
         </div>
         <div class="row-actions">
           <input id="joinCodeInput" placeholder="Have a code?" />
@@ -2790,6 +2794,19 @@ function bindView() {
     homeId = null;
     inviteCode = "";
     showAuth(true);
+  };
+  const sendInvite = document.getElementById("sendInvite");
+  if (sendInvite) sendInvite.onclick = async () => {
+    const msg = document.getElementById("joinMsg");
+    const email = (document.getElementById("partnerEmail").value || "").trim();
+    if (!email) { if (msg) msg.textContent = "Enter their email first."; return; }
+    if (!inviteCode) { if (msg) msg.textContent = "No household code yet. Run supabase-setup.sql."; return; }
+    if (!sb) { if (msg) msg.textContent = "Not connected."; return; }
+    if (msg) msg.textContent = "Sending…";
+    const { data, error } = await sb.functions.invoke("invite-partner", { body: { email, code: inviteCode } });
+    if (error) { if (msg) msg.textContent = error.message || "Deploy the invite-partner function in Supabase first."; return; }
+    if (data && data.error) { if (msg) msg.textContent = data.error; return; }
+    if (msg) msg.textContent = (data && data.message) || "Invite sent.";
   };
   const copyInvite = document.getElementById("copyInvite");
   if (copyInvite) copyInvite.onclick = async () => {
