@@ -561,12 +561,80 @@ function vsLastLine(cur, last) {
   return `${heroMoney(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than last month${pct ? " · " + pct : ""}`;
 }
 
+function isPhone() {
+  return window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
+}
+function mobileDash() {
+  const who = viewerId();
+  const cash = visibleAccounts().filter(a => /check|sav|cash|joint/i.test((a.type || "") + " " + (a.name || ""))).reduce((s, a) => s + Math.max(0, Number(a.balance || 0)), 0);
+  const allCash = visibleAccounts().reduce((s, a) => s + Math.max(0, Number(a.balance || 0)), 0);
+  const cards = visibleDebts().filter(d => /credit/i.test(d.type || "")).reduce((s, d) => s + Number(d.balance || 0), 0);
+  const loans = visibleDebts().filter(d => !/credit/i.test(d.type || "")).reduce((s, d) => s + Number(d.balance || 0), 0);
+  const txSpend = visibleTxs().filter(t => (t.date || "").startsWith(viewMonth) && (dashMode === "household" ? t.type === "shared" || true : t.payer === who || t.type === "shared")).reduce((s, t) => s + Number(t.amount || 0), 0);
+  const paidBills = visibleMonthly().filter(m => monthPaidFor(m, who)).reduce((s, m) => s + monthShare(m, who), 0);
+  const spent = txSpend + paidBills;
+  const inc = (bag().income || []).filter(i => dashMode === "household" || i.owner === who).reduce((s, i) => s + Number(i.amount || 0), 0);
+  const next = [];
+  visibleMonthly().forEach(m => {
+    if (monthPaidFor(m, who)) return;
+    next.push({ kind: "bill", id: m.id, name: m.name, amount: monthShare(m, who), days: daysUntil(dueOnViewMonth(m.due)) });
+  });
+  visibleDebts().forEach(d => {
+    if (d.minPaid || !(Number(d.balance) > 0.05)) return;
+    next.push({ kind: "debt", id: d.id, name: d.name + " min", amount: Number(d.minimum || 0), days: daysUntil(dueOnViewMonth("01")) });
+  });
+  next.sort((a, b) => a.days - b.days);
+  const tabs = user === "solo" ? "" : `
+    <div class="row-actions">
+      <button class="btn ${dashMode==="household"?"active":""}" data-dashmode="household">Household</button>
+      <button class="btn ${dashMode==="personal"?"active":""}" data-dashmode="personal">Personal</button>
+    </div>`;
+  return `
+    ${tabs}
+    ${monthBanner()}
+    <p class="kicker">This month</p>
+    <h1>Check-in</h1>
+    <div class="m-glance">
+      <div class="tile">
+        <div class="label">Checking</div>
+        <div class="val">${heroMoney(cash || allCash)}</div>
+        <p class="note">Cash in accounts</p>
+      </div>
+      <div class="tile">
+        <div class="label">Credit cards</div>
+        <div class="val">${heroMoney(cards)}</div>
+        <p class="note">${loans ? "Other debts " + heroMoney(loans) : "Card balances"}</p>
+      </div>
+      <div class="tile">
+        <div class="label">Spent this month</div>
+        <div class="val">${heroMoney(spent)}</div>
+        <p class="note">${inc ? "Pay " + heroMoney(inc) : "Mark bills paid or add a charge"}</p>
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="btn primary" data-capture="tx">Add spend</button>
+      <button class="btn" data-go="monthly">Bills</button>
+      <button class="btn" data-go="debts">Debts</button>
+    </div>
+    <div class="tile">
+      <div class="label">Decide next</div>
+      ${next.slice(0, 5).map(n => `<div class="m-next">
+        <div>
+          <div>${n.name}</div>
+          <div class="note">${n.days < 0 ? "Overdue" : n.days === 0 ? "Today" : "In " + n.days + "d"} · ${money(n.amount)}</div>
+        </div>
+        <button class="btn" data-${n.kind === "debt" ? "debt-min-paid" : "month-paid"}="${n.id}">Paid</button>
+      </div>`).join("") || `<p class="note">Nothing open.</p>`}
+    </div>
+  `;
+}
 function dashboard() {
   const tabs = user === "solo" ? "" : `
     <div class="row-actions">
       <button class="btn ${dashMode==="household"?"active":""}" data-dashmode="household">Household</button>
       <button class="btn ${dashMode==="personal"?"active":""}" data-dashmode="personal">Personal</button>
     </div>`;
+  if (isPhone()) return mobileDash();
   if (dashMode === "household" && user !== "solo") return tabs + monthBanner() + shared();
   return tabs + monthBanner() + personal();
 }
@@ -2484,6 +2552,9 @@ function settings() {
 
 function bindView() {
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
+  app.querySelectorAll("[data-capture]").forEach(el => el.onclick = () => {
+    if (el.dataset.capture === "tx") openTxModal(null);
+  });
   app.querySelectorAll("[data-dashmode]").forEach(el => el.onclick = () => {
     dashMode = el.dataset.dashmode;
     view = "dashboard";
@@ -3208,4 +3279,7 @@ document.getElementById("onboardSave") && (document.getElementById("onboardSave"
   const el = document.getElementById("authJoin");
   if (code && el) el.value = code;
 })();
+if (window.matchMedia) {
+  window.matchMedia("(max-width: 700px)").addEventListener("change", () => render());
+}
 bootAuth();
