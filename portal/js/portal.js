@@ -1836,7 +1836,14 @@ function monthly() {
   const staticNet = myIncome - plannedOut;
   if (!state.goalMonth) state.goalMonth = {};
   const goalOut = Number(state.goalMonth[viewMonth] || 0);
-  const cashflow = staticNet - extras - goalOut;
+  const monthNames = new Set(base.map(m => String(m.name || "").trim().toLowerCase()));
+  const whoNow = viewerId();
+  const txOut = visibleTxs().filter(t => {
+    if (!(t.date || "").startsWith(viewMonth)) return false;
+    if (monthNames.has(String(t.name || "").trim().toLowerCase())) return false;
+    return t.payer === whoNow || t.type === "shared" || t.payer === "both";
+  }).reduce((s, t) => s + Number(t.amount || 0), 0);
+  const cashflow = staticNet - extras - goalOut - txOut;
   const vsPlan = cashflow - staticNet;
   const monthRow = m => `<tr>
     <td>${m.name}</td>
@@ -1886,7 +1893,7 @@ function monthly() {
       <div class="tile">
         <div class="label">Cash vs plan</div>
         <div class="val" style="color:${cashflow>=0?"var(--good)":"var(--bad)"}">${signedHero(cashflow)}</div>
-        <p class="note">${vsPlan === 0 ? "Same as planned net until extras or goals." : (vsPlan < 0 ? signedHero(vsPlan) + " extras/goals" : signedHero(vsPlan) + " vs plan")}</p>
+        <p class="note">${vsPlan === 0 ? "Same as planned net until extras, goals, or extra spend." : signedHero(vsPlan) + " extras, goals, and transactions"}</p>
       </div>
     </div>
     <div class="row-actions">
