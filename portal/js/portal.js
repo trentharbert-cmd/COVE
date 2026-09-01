@@ -213,7 +213,7 @@ if (!state.extraLog) state.extraLog = [];
 if (!state.goals) state.goals = [];
 if (!state.budgets) state.budgets = [];
 let user = "alex";
-let view = "shared";
+let view = "dashboard";
 let expenseFilter = "all";
 let shareEdit = null;
 let monthEdit = null;
@@ -262,6 +262,7 @@ let pdUp = "out";
 let pdSub = "mo";
 let pdBill = "mo";
 let pdAcct = "breakdown";
+let dashMode = "personal";
 const PIE = ["#3ee0c5", "#5b8def", "#f07167", "#e7b34d", "#a78bfa", "#67e8f9", "#94a3b8", "#34d399", "#fb7185"];
 
 const app = document.getElementById("app");
@@ -352,19 +353,19 @@ function suggestCategory(name) {
 function render() {
   document.querySelectorAll(".nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.view === view);
-    const coupleOnly = ["shared"];
-    if (user === "solo" && coupleOnly.includes(b.dataset.view)) b.style.opacity = "0.35";
-    else b.style.opacity = "1";
+    b.style.opacity = "1";
   });
   document.getElementById("modeLabel").textContent = user === "solo" ? "Individual" : "Couple household · Him + Her";
   const ht = document.getElementById("headerTitle");
   if (ht) ht.textContent = viewMonthLabel();
   const mp = document.getElementById("monthPick");
   if (mp && mp.value !== viewMonth) mp.value = viewMonth;
-  if (user === "solo" && view === "shared") view = "personal";
+  if (view === "shared") { view = "dashboard"; dashMode = "household"; }
+  if (view === "personal") { view = "dashboard"; dashMode = "personal"; }
+  if (user === "solo") dashMode = "personal";
   if (view === "expenses" || view === "settle") view = "monthly";
 
-  const map = { shared, personal, expenses: monthly, transactions, monthly, calendar, accounts, debts, budgets, goals, financials, settle: monthly, settings };
+  const map = { dashboard, shared, personal, expenses: monthly, transactions, monthly, calendar, accounts, debts, budgets, goals, financials, settle: monthly, settings };
   app.innerHTML = map[view]();
   bindView();
 }
@@ -431,6 +432,16 @@ function vsLastLine(cur, last) {
   if (!diff) return "Even with last month";
   const pct = last ? Math.abs(diff / last * 100).toFixed(0) + "%" : "";
   return `${heroMoney(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than last month${pct ? " · " + pct : ""}`;
+}
+
+function dashboard() {
+  const tabs = user === "solo" ? "" : `
+    <div class="row-actions">
+      <button class="btn ${dashMode==="household"?"active":""}" data-dashmode="household">Household</button>
+      <button class="btn ${dashMode==="personal"?"active":""}" data-dashmode="personal">Personal</button>
+    </div>`;
+  if (dashMode === "household" && user !== "solo") return tabs + shared();
+  return tabs + personal();
 }
 
 function shared() {
@@ -2233,6 +2244,11 @@ function settings() {
 
 function bindView() {
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
+  app.querySelectorAll("[data-dashmode]").forEach(el => el.onclick = () => {
+    dashMode = el.dataset.dashmode;
+    view = "dashboard";
+    render();
+  });
   app.querySelectorAll("[data-pd]").forEach(el => el.onclick = () => {
     const [k, v] = (el.dataset.pd || "").split(":");
     if (k === "up") pdUp = v;
