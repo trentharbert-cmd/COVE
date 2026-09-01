@@ -38,10 +38,19 @@ Deno.serve(async (req) => {
     if (error) {
       const already = /already|registered|exists/i.test(error.message || "");
       if (already) {
+        const { error: recErr } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+        if (recErr) {
+          return Response.json({
+            ok: true,
+            existing: true,
+            message: "Account already exists. They should open the portal, use Forgot password, then enter the invite code.",
+            link: redirectTo,
+          }, { headers: cors });
+        }
         return Response.json({
           ok: true,
           existing: true,
-          message: "They already have an account. Send them the invite link instead.",
+          message: "They already had an account. Sent a new password link so they can get in.",
           link: redirectTo,
         }, { headers: cors });
       }
