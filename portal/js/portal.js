@@ -102,6 +102,22 @@ function emptyHousehold() {
 function portalUrl() {
   return window.location.origin + window.location.pathname;
 }
+function inviteLink() {
+  if (!inviteCode) return portalUrl();
+  return portalUrl() + "?join=" + encodeURIComponent(inviteCode);
+}
+function claimSeat() {
+  if (!sbUser) return;
+  if (!state.members) state.members = {};
+  if (state.members[sbUser.id]) {
+    user = state.members[sbUser.id];
+    return;
+  }
+  const taken = Object.values(state.members);
+  user = taken.includes("alex") ? "jordan" : "alex";
+  state.members[sbUser.id] = user;
+  save();
+}
 
 function load() {
   const raw = localStorage.getItem(KEY);
@@ -276,7 +292,8 @@ async function bootAuth() {
   sbUser = data.session ? data.session.user : null;
   if (!sbUser) { showAuth(true); return; }
   showAuth(false);
-  await pullCloud();
+  await pullCloud(new URLSearchParams(location.search).get("join") || "");
+  claimSeat();
   render();
 }
 
@@ -431,7 +448,14 @@ function render() {
     b.classList.toggle("active", b.dataset.view === view);
     b.style.opacity = "1";
   });
-  document.getElementById("modeLabel").textContent = user === "solo" ? "Individual" : "Couple household · Him + Her";
+  document.getElementById("modeLabel").textContent = user === "solo" ? "Individual" : "Couple household · " + (state.users[user] ? state.users[user].name : user);
+  const us = document.getElementById("userSelect");
+  if (us) {
+    us.value = user;
+    const locked = !!(sbUser && state.members && state.members[sbUser.id]);
+    us.disabled = locked;
+    us.title = locked ? "This login is locked to your seat" : "";
+  }
   const ht = document.getElementById("headerTitle");
   if (ht) ht.textContent = viewMonthLabel();
   const mp = document.getElementById("monthPick");
@@ -1808,7 +1832,11 @@ function monthly() {
 function visibleDebts() {
   const list = bag().debts || [];
   if (user === "solo") return list.filter(d => d.owner === "alex" || d.owner === "both");
-  return list.filter(d => d.owner === "both" || d.owner === user);
+  return list.filter(d => {
+    if (d.owner === "both") return !d.hiddenFromPartner;
+    if (d.owner === user) return true;
+    return !!d.sharedWithPartner;
+  });
 }
 
 function defaultApr(type) {
@@ -2372,8 +2400,13 @@ function settings() {
       </div>
       <div class="tile">
         <h3>Invite partner</h3>
-        <p class="note">They create an account and enter this code on the login screen.</p>
-        <p><strong id="inviteCodeLabel">${inviteCode || "Save once after the new SQL to get a code"}</strong></p>
+        <p class="note">They open this link, create an account, and land in this household. You are ${state.users[user] ? state.users[user].name : user} on this login.</p>
+        <p><strong id="inviteCodeLabel">${inviteCode || "No code yet — run supabase-setup.sql"}</strong></p>
+        <p class="note" id="inviteLinkLabel">${inviteCode ? inviteLink() : ""}</p>
+        <div class="row-actions">
+          <button class="btn primary" id="copyInvite" type="button">Copy invite link</button>
+          <a class="btn" id="mailInvite" href="${inviteCode ? "mailto:?subject=" + encodeURIComponent("Join our Cove household") + "&body=" + encodeURIComponent("Create an account and join with this link:\n\n" + inviteLink() + "\n\nCode: " + inviteCode) : "#"}">Email invite</a>
+        </div>
         <div class="row-actions">
           <input id="joinCodeInput" placeholder="Have a code?" />
           <button class="btn" id="joinHomeBtn">Join household</button>
@@ -2758,6 +2791,16 @@ function bindView() {
     inviteCode = "";
     showAuth(true);
   };
+  const copyInvite = document.getElementById("copyInvite");
+  if (copyInvite) copyInvite.onclick = async () => {
+    const msg = document.getElementById("joinMsg");
+    try {
+      await navigator.clipboard.writeText(inviteLink());
+      if (msg) msg.textContent = "Invite link copied.";
+    } catch {
+      if (msg) msg.textContent = inviteLink();
+    }
+  };
   const joinHomeBtn = document.getElementById("joinHomeBtn");
   if (joinHomeBtn) joinHomeBtn.onclick = async () => {
     const code = (document.getElementById("joinCodeInput").value || "").trim();
@@ -2766,6 +2809,7 @@ function bindView() {
     const { error } = await sb.rpc("join_home", { code: code.toLowerCase() });
     if (error) { if (msg) msg.textContent = error.message; return; }
     await pullCloud();
+    claimSeat();
     render();
   };
   const rst = document.getElementById("resetDemo");
@@ -3032,6 +3076,7 @@ document.getElementById("authIn") && (document.getElementById("authIn").onclick 
   sbUser = data.user;
   showAuth(false);
   await pullCloud(joinCodeFromForm());
+  claimSeat();
   render();
 });
 document.getElementById("authUp") && (document.getElementById("authUp").onclick = async () => {
@@ -3048,6 +3093,7 @@ document.getElementById("authUp") && (document.getElementById("authUp").onclick 
   sbUser = data.user;
   showAuth(false);
   await pullCloud(joinCodeFromForm());
+  claimSeat();
   render();
 });
 document.getElementById("authForgot") && (document.getElementById("authForgot").onclick = async () => {
@@ -3070,4 +3116,9 @@ if (sb) {
   });
 }
 
+(function prefillJoin() {
+  const code = new URLSearchParams(location.search).get("join");
+  const el = document.getElementById("authJoin");
+  if (code && el) el.value = code;
+})();
 bootAuth();
