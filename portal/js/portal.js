@@ -2445,6 +2445,17 @@ function settings() {
         <p class="note" id="joinMsg"></p>
       </div>
       <div class="tile">
+        <h3>Closed months</h3>
+        <p class="note">Live month is ${state.liveMonth || "—"}. Open a closed month from the header picker. Dashboard and Financials read that snapshot.</p>
+        <div class="row-actions">
+          ${Object.keys(state.snapshots || {}).sort().map(k => `<button class="btn" data-open-month="${k}">${k}</button>`).join("") || `<span class="note">None yet</span>`}
+        </div>
+      </div>
+      <div class="tile">
+        <h3>Legal</h3>
+        <p class="note"><a href="../privacy.html">Privacy</a> · <a href="../terms.html">Terms</a></p>
+      </div>
+      <div class="tile">
         <h3>Data</h3>
         <div class="row-actions">
           <button class="btn" id="exportMonthly">Export monthly CSV</button>
@@ -2475,6 +2486,13 @@ function bindView() {
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
   app.querySelectorAll("[data-dashmode]").forEach(el => el.onclick = () => {
     dashMode = el.dataset.dashmode;
+    view = "dashboard";
+    render();
+  });
+  app.querySelectorAll("[data-open-month]").forEach(el => el.onclick = () => {
+    viewMonth = el.dataset.openMonth;
+    const mp = document.getElementById("monthPick");
+    if (mp) mp.value = viewMonth;
     view = "dashboard";
     render();
   });
@@ -2981,6 +2999,8 @@ function openTxModal(row) {
 }
 const menuBtn = document.getElementById("menuBtn");
 if (menuBtn) menuBtn.onclick = () => document.body.classList.toggle("nav-open");
+const navScrim = document.getElementById("navScrim");
+if (navScrim) navScrim.onclick = () => document.body.classList.remove("nav-open");
 document.querySelectorAll(".nav-btn").forEach(b => {
   const prev = b.onclick;
   b.onclick = () => {
