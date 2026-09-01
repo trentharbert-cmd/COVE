@@ -76,6 +76,27 @@ const SB_KEY = "sb_publishable_AYUgvb3OWADQGfjmYHrYBQ_3whxkyi9";
 const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 let sbUser = null;
 let saveTimer = null;
+let homeId = null;
+let inviteCode = "";
+
+function emptyHousehold() {
+  return {
+    users: structuredClone(seed.users),
+    accounts: [],
+    txs: [],
+    budgets: [],
+    goals: [],
+    extraLog: [],
+    settled: 0,
+    income: [],
+    monthly: [],
+    debts: []
+  };
+}
+
+function portalUrl() {
+  return window.location.origin + window.location.pathname;
+}
 
 function load() {
   const raw = localStorage.getItem(KEY);
@@ -89,8 +110,26 @@ function save() {
   saveTimer = setTimeout(pushCloud, 700);
 }
 
+function applyState(next) {
+  state = next || emptyHousehold();
+  if (!state.users) state.users = structuredClone(seed.users);
+  if (!state.extraLog) state.extraLog = [];
+  if (!state.goals) state.goals = [];
+  if (!state.budgets) state.budgets = [];
+  if (!state.monthly) state.monthly = [];
+  if (!state.debts) state.debts = [];
+  if (!state.income) state.income = [];
+  if (!state.txs) state.txs = [];
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
+
 async function pushCloud() {
   if (!sb || !sbUser) return;
+  if (homeId) {
+    const { error } = await sb.from("homes").update({ data: state, updated_at: new Date().toISOString() }).eq("id", homeId);
+    if (error) console.warn("Cove save failed", error.message);
+    return;
+  }
   const { error } = await sb.from("households").upsert({
     user_id: sbUser.id,
     data: state,
@@ -99,17 +138,47 @@ async function pushCloud() {
   if (error) console.warn("Cove save failed", error.message);
 }
 
-async function pullCloud() {
+async function pullCloud(joinCode) {
   if (!sb || !sbUser) return;
-  const { data, error } = await sb.from("households").select("data").eq("user_id", sbUser.id).maybeSingle();
-  if (error) { console.warn("Cove load failed", error.message); return; }
-  if (data && data.data) {
-    state = data.data;
-    if (!state.extraLog) state.extraLog = [];
-    if (!state.goals) state.goals = [];
-    if (!state.budgets) state.budgets = [];
-    localStorage.setItem(KEY, JSON.stringify(state));
+  const mem = await sb.from("home_members").select("home_id, homes(id, data, invite_code)").eq("user_id", sbUser.id).maybeSingle();
+  if (!mem.error && mem.data && mem.data.homes) {
+    homeId = mem.data.home_id;
+    inviteCode = mem.data.homes.invite_code || "";
+    applyState(mem.data.homes.data);
+    return;
+  }
+  if (joinCode) {
+    const joined = await sb.rpc("join_home", { code: joinCode.trim().toLowerCase() });
+    if (joined.error) { console.warn(joined.error.message); setAuthMsg(joined.error.message); }
+    else {
+      homeId = joined.data;
+      const again = await sb.from("home_members").select("home_id, homes(id, data, invite_code)").eq("user_id", sbUser.id).maybeSingle();
+      if (again.data && again.data.homes) {
+        homeId = again.data.home_id;
+        inviteCode = again.data.homes.invite_code || "";
+        applyState(again.data.homes.data);
+        return;
+      }
+    }
+  }
+  const old = await sb.from("households").select("data").eq("user_id", sbUser.id).maybeSingle();
+  const created = await sb.rpc("create_home");
+  if (!created.error && created.data) {
+    homeId = created.data;
+    const row = await sb.from("homes").select("data, invite_code").eq("id", homeId).maybeSingle();
+    inviteCode = (row.data && row.data.invite_code) || "";
+    if (old.data && old.data.data && ((old.data.data.monthly || []).length || (old.data.data.debts || []).length)) {
+      applyState(old.data.data);
+    } else {
+      applyState(emptyHousehold());
+    }
+    await pushCloud();
+    return;
+  }
+  if (old.data && old.data.data) {
+    applyState(old.data.data);
   } else {
+    applyState(emptyHousehold());
     await sb.from("households").upsert({ user_id: sbUser.id, data: state, updated_at: new Date().toISOString() });
   }
 }
@@ -1961,6 +2030,16 @@ function settings() {
         ${sbUser ? `<button class="btn" id="authOut">Log out</button>` : `<p class="note">Viewing as ${user === "solo" ? "Solo" : state.users[user].name}.</p>`}
       </div>
       <div class="tile">
+        <h3>Invite partner</h3>
+        <p class="note">They create an account and enter this code on the login screen.</p>
+        <p><strong id="inviteCodeLabel">${inviteCode || "Save once after the new SQL to get a code"}</strong></p>
+        <div class="row-actions">
+          <input id="joinCodeInput" placeholder="Have a code?" />
+          <button class="btn" id="joinHomeBtn">Join household</button>
+        </div>
+        <p class="note" id="joinMsg"></p>
+      </div>
+      <div class="tile">
         <h3>Data</h3>
         <div class="row-actions">
           <button class="btn" id="exportMonthly">Export monthly CSV</button>
@@ -2301,7 +2380,19 @@ function bindView() {
   if (authOut) authOut.onclick = async () => {
     if (sb) await sb.auth.signOut();
     sbUser = null;
+    homeId = null;
+    inviteCode = "";
     showAuth(true);
+  };
+  const joinHomeBtn = document.getElementById("joinHomeBtn");
+  if (joinHomeBtn) joinHomeBtn.onclick = async () => {
+    const code = (document.getElementById("joinCodeInput").value || "").trim();
+    const msg = document.getElementById("joinMsg");
+    if (!code || !sb) return;
+    const { error } = await sb.rpc("join_home", { code: code.toLowerCase() });
+    if (error) { if (msg) msg.textContent = error.message; return; }
+    await pullCloud();
+    render();
   };
   const rst = document.getElementById("resetDemo");
   if (rst) rst.onclick = () => { localStorage.removeItem(KEY); state = load(); if (!state.extraLog) state.extraLog = []; render(); };
@@ -2547,6 +2638,11 @@ if (shareModal) {
   };
 }
 
+function joinCodeFromForm() {
+  const el = document.getElementById("authJoin");
+  return (el && el.value ? el.value : "").trim().toLowerCase();
+}
+
 document.getElementById("authIn") && (document.getElementById("authIn").onclick = async () => {
   if (!sb) return setAuthMsg("Supabase did not load.");
   setAuthMsg("Signing in…");
@@ -2556,7 +2652,7 @@ document.getElementById("authIn") && (document.getElementById("authIn").onclick 
   if (error) return setAuthMsg(error.message);
   sbUser = data.user;
   showAuth(false);
-  await pullCloud();
+  await pullCloud(joinCodeFromForm());
   render();
 });
 document.getElementById("authUp") && (document.getElementById("authUp").onclick = async () => {
@@ -2572,8 +2668,27 @@ document.getElementById("authUp") && (document.getElementById("authUp").onclick 
   }
   sbUser = data.user;
   showAuth(false);
-  await pullCloud();
+  await pullCloud(joinCodeFromForm());
   render();
 });
+document.getElementById("authForgot") && (document.getElementById("authForgot").onclick = async () => {
+  if (!sb) return setAuthMsg("Supabase did not load.");
+  const email = document.getElementById("authEmail").value.trim();
+  if (!email) return setAuthMsg("Enter your email first.");
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: portalUrl() });
+  setAuthMsg(error ? error.message : "Check your email for a reset link.");
+});
+if (sb) {
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      const next = prompt("New password (6+ characters)");
+      if (next && next.length >= 6) {
+        const { error } = await sb.auth.updateUser({ password: next });
+        setAuthMsg(error ? error.message : "Password updated. You can use the app.");
+      }
+    }
+    if (session) sbUser = session.user;
+  });
+}
 
 bootAuth();
