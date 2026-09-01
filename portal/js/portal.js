@@ -377,6 +377,15 @@ const app = document.getElementById("app");
 const money = n => (n < 0 ? "-" : "") + "$" + Math.abs(n).toFixed(2);
 const heroMoney = n => (n < 0 ? "-" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("en-US");
 const signedHero = n => (n > 0 ? "+" : n < 0 ? "-" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("en-US");
+function shortDue(iso) {
+  if (!iso) return "—";
+  const s = String(iso);
+  const ymd = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymd) return Number(ymd[2]) + "-" + String(ymd[3]).padStart(2, "0");
+  const md = s.match(/(\d{1,2})-(\d{1,2})/);
+  if (md) return Number(md[1]) + "-" + String(md[2]).padStart(2, "0");
+  return s;
+}
 
 function spent(cat, scope) {
   return state.txs
@@ -577,11 +586,11 @@ function mobileDash() {
   const next = [];
   visibleMonthly().forEach(m => {
     if (monthPaidFor(m, who)) return;
-    next.push({ kind: "bill", id: m.id, name: m.name, amount: monthShare(m, who), days: daysUntil(dueOnViewMonth(m.due)) });
+    next.push({ kind: "bill", id: m.id, name: m.name, amount: monthShare(m, who), due: dueOnViewMonth(m.due), days: daysUntil(dueOnViewMonth(m.due)) });
   });
   visibleDebts().forEach(d => {
     if (d.minPaid || !(Number(d.balance) > 0.05)) return;
-    next.push({ kind: "debt", id: d.id, name: d.name + " min", amount: Number(d.minimum || 0), days: daysUntil(dueOnViewMonth("01")) });
+    next.push({ kind: "debt", id: d.id, name: d.name + " min", amount: Number(d.minimum || 0), due: dueOnViewMonth("01"), days: daysUntil(dueOnViewMonth("01")) });
   });
   next.sort((a, b) => a.days - b.days);
   const tabs = user === "solo" ? "" : `
@@ -621,7 +630,7 @@ function mobileDash() {
       ${next.slice(0, 5).map(n => `<div class="m-next">
         <div>
           <div>${n.name}</div>
-          <div class="note">${n.days < 0 ? "Overdue" : n.days === 0 ? "Today" : "In " + n.days + "d"} · ${money(n.amount)}</div>
+          <div class="note">${shortDue(n.due)} · ${n.days < 0 ? "Overdue" : n.days === 0 ? "Today" : "In " + n.days + "d"} · ${money(n.amount)}</div>
         </div>
         <button class="btn" data-${n.kind === "debt" ? "debt-min-paid" : "month-paid"}="${n.id}">Paid</button>
       </div>`).join("") || `<p class="note">Nothing open.</p>`}
@@ -687,7 +696,7 @@ function shared() {
         ${attention.length ? `<table class="table"><thead><tr><th>Expense</th><th>Amount</th><th>Due</th></tr></thead><tbody>
           ${attention.map(t => `<tr>
             <td>${t.name}</td><td>${money(t.amount)}</td>
-            <td>${t.due || "—"} · ${daysUntil(t.due) < 0 ? "overdue" : daysUntil(t.due) === 0 ? "today" : daysUntil(t.due) + "d"}</td>
+            <td>${shortDue(t.due)} · ${daysUntil(t.due) < 0 ? "overdue" : daysUntil(t.due) === 0 ? "today" : daysUntil(t.due) + "d"}</td>
           </tr>`).join("")}
         </tbody></table>` : `<p class="note">Nothing due this week.</p>`}
       </div>
@@ -1017,7 +1026,7 @@ function personal() {
       <div class="tile pdash-needs">
         <div class="label">Needs attention</div>
         ${unpaidItems.length ? `<table class="table"><thead><tr><th>Item</th><th>Amount</th><th>Due</th></tr></thead><tbody>
-          ${unpaidItems.map(x => `<tr><td>${x.name}</td><td>${money(x.amount)}</td><td>${x.due || "—"}</td></tr>`).join("")}
+          ${unpaidItems.map(x => `<tr><td>${x.name}</td><td>${money(x.amount)}</td><td>${shortDue(x.due)}</td></tr>`).join("")}
         </tbody></table>` : `<p class="note">Nothing open on your side.</p>`}
       </div>
       <div class="pdash-quad">
@@ -1103,7 +1112,7 @@ function expenses() {
           ${list.map(t => `<tr>
             <td>${t.name}<div class="note">${t.note || ""}</div></td>
             <td>${money(t.amount)}</td>
-            <td>${t.due || "—"}</td>
+            <td>${shortDue(t.due)}</td>
             <td>${state.users[t.payer]?.name || t.payer}</td>
             <td>${t.split === 0 || t.split === 100 ? "Assigned" : t.split + "% / " + (100 - t.split) + "%"}</td>
             <td>
@@ -1255,7 +1264,7 @@ function calendar() {
         <thead><tr><th>Due</th><th>Name</th><th>Type</th><th>Amount</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r => `<tr>
-            <td>${r.due}</td>
+            <td>${shortDue(r.due)}</td>
             <td>${r.name}</td>
             <td>${r.kind}</td>
             <td>${money(r.amount)}</td>
@@ -1821,7 +1830,7 @@ function monthly() {
   const monthRow = m => `<tr>
     <td>${m.name}</td>
     <td>${money(m.amount)}${isJointBill(m) ? `<div class="note">Your share ${money(monthShare(m))}</div>` : ""}</td>
-    <td>${m.due || "—"}</td>
+    <td>${shortDue(m.due)}</td>
     <td>${m.kind}</td>
     <td><span class="badge ${m.type}">${isJointBill(m) ? "shared" : m.type}</span></td>
     <td>${monthFilter === "shared" && isJointBill(m)
