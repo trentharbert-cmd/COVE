@@ -619,6 +619,14 @@ function mobileDash() {
         <div class="val">${heroMoney(spent)}</div>
         <p class="note">${inc ? "Pay " + heroMoney(inc) : "Mark bills paid or add a charge"}</p>
       </div>
+      <div class="tile">
+        <div class="label">Still to pay</div>
+        <div class="val" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+          <span>${next.length}</span>
+          <span>${heroMoney(next.reduce((s, n) => s + n.amount, 0))}</span>
+        </div>
+        <p class="note">Open bills + mins</p>
+      </div>
     </div>
     <div class="row-actions">
       <button class="btn primary" data-capture="tx">Add spend</button>
@@ -1826,7 +1834,10 @@ function monthly() {
     + allDebts.filter(d => d.minPaid).reduce((s, d) => s + Number(d.minimum || 0), 0);
   const extras = allDebts.reduce((s, d) => s + Number(d.extra || 0), 0);
   const staticNet = myIncome - plannedOut;
-  const cashflow = myIncome - paidOut - extras;
+  if (!state.goalMonth) state.goalMonth = {};
+  const goalOut = Number(state.goalMonth[viewMonth] || 0);
+  const cashflow = staticNet - extras - goalOut;
+  const vsPlan = cashflow - staticNet;
   const monthRow = m => `<tr>
     <td>${m.name}</td>
     <td>${money(m.amount)}${isJointBill(m) ? `<div class="note">Your share ${money(monthShare(m))}</div>` : ""}</td>
@@ -1853,29 +1864,29 @@ function monthly() {
     <h1>Monthly expenses</h1>
     <p class="note">Living costs, subscriptions, and debt minimums for this view. Date-night spend lives on Transactions.</p>
     <div class="grid-3">
-      <div class="tile">
-        <div class="label">Income</div>
-        <div class="val income-edit" id="editIncome" contenteditable="true" spellcheck="false">${heroMoney(myIncome)}</div>
-      </div>
-      <div class="tile">
-        <div class="label">Unpaid</div>
-        <div class="val" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
-          <span>${unpaidItems.length + debtUnpaid.length}</span>
-          <span>${money(unpaidSum)}</span>
-        </div>
-        <p class="note">Bills + debt mins still open · extras not included</p>
-      </div>
       <div class="tile split-tile">
         <div class="split-half">
-          <div class="label">Planned net</div>
-          <div class="val" style="color:${staticNet>=0?"var(--good)":"var(--bad)"}">${signedHero(staticNet)}</div>
-          <p class="note">Income − monthly bills − debt mins</p>
+          <div class="label">Income</div>
+          <div class="val income-edit" id="editIncome" contenteditable="true" spellcheck="false">${heroMoney(myIncome)}</div>
         </div>
         <div class="split-half">
-          <div class="label">Cashflow</div>
-          <div class="val" style="color:${cashflow>=0?"var(--good)":"var(--bad)"}">${signedHero(cashflow)}</div>
-          <p class="note">After paid items + extras. Unused subs stay out.</p>
+          <div class="label">Still to pay</div>
+          <div class="val" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+            <span>${unpaidItems.length + debtUnpaid.length}</span>
+            <span>${heroMoney(unpaidSum)}</span>
+          </div>
+          <p class="note">Open items · not leftover</p>
         </div>
+      </div>
+      <div class="tile">
+        <div class="label">Planned net</div>
+        <div class="val" style="color:${staticNet>=0?"var(--good)":"var(--bad)"}">${signedHero(staticNet)}</div>
+        <p class="note">If you pay the list. Extras and goals stay out.</p>
+      </div>
+      <div class="tile">
+        <div class="label">Cash vs plan</div>
+        <div class="val" style="color:${cashflow>=0?"var(--good)":"var(--bad)"}">${signedHero(cashflow)}</div>
+        <p class="note">${vsPlan === 0 ? "Same as planned net until extras or goals." : (vsPlan < 0 ? signedHero(vsPlan) + " extras/goals" : signedHero(vsPlan) + " vs plan")}</p>
       </div>
     </div>
     <div class="row-actions">
@@ -2999,12 +3010,26 @@ function bindView() {
     el.onclick = () => {
       const g = (state.goals || []).find(x => x.id === el.dataset.goalAdd);
       const input = app.querySelector(`[data-goal-amt="${el.dataset.goalAdd}"]`);
-      if (g && input) { g.saved = Number(g.saved || 0) + Math.max(0, Number(input.value || 0)); save(); render(); }
+      if (g && input) {
+        const add = Math.max(0, Number(input.value || 0));
+        g.saved = Number(g.saved || 0) + add;
+        if (!state.goalMonth) state.goalMonth = {};
+        state.goalMonth[viewMonth] = Number(state.goalMonth[viewMonth] || 0) + add;
+        save();
+        render();
+      }
     };
   });
   app.querySelectorAll("[data-goal-left]").forEach(el => el.onclick = () => {
     const g = (state.goals || []).find(x => x.id === el.dataset.goalLeft);
-    if (g) { g.saved = Number(g.saved || 0) + Math.max(0, viewerLeftover()); save(); render(); }
+    if (g) {
+      const add = Math.max(0, viewerLeftover());
+      g.saved = Number(g.saved || 0) + add;
+      if (!state.goalMonth) state.goalMonth = {};
+      state.goalMonth[viewMonth] = Number(state.goalMonth[viewMonth] || 0) + add;
+      save();
+      render();
+    }
   });
   app.querySelectorAll("[data-del-goal]").forEach(el => el.onclick = () => {
     state.goals = (state.goals || []).filter(g => g.id !== el.dataset.delGoal);
