@@ -2153,9 +2153,10 @@ function debts() {
     const apr = d.apr || defaultApr(d.type);
     const pay = Number(d.minimum || 0) + Number(d.extra || 0);
     const stats = payoffStats(Number(d.balance || 0), pay, apr);
-    const whose = d.owner === "both" ? "Shared" : (state.users[d.owner]?.name || d.owner);
+    const alexN = state.users.alex ? state.users.alex.name : "Him";
+    const jordN = state.users.jordan ? state.users.jordan.name : "Her";
     return `<tr>
-      <td>${d.name}<div class="note">${whose}</div></td>
+      <td>${d.name}</td>
       <td>${d.type || "—"}</td>
       <td><input data-debt-bal="${d.id}" type="number" step="1" min="0" value="${d.balance || 0}" style="width:108px" /></td>
       <td><input data-debt-apr="${d.id}" type="number" step="0.01" min="0" value="${apr}" style="width:72px" /></td>
@@ -2164,6 +2165,11 @@ function debts() {
       <td>${money(pay)}</td>
       <td>${Number(d.balance) > 0.05 ? payoffLabel(stats.months) : "—"}</td>
       <td>
+        <select data-debt-owner="${d.id}">
+          <option value="both" ${d.owner==="both"?"selected":""}>Shared</option>
+          <option value="alex" ${d.owner==="alex"?"selected":""}>${alexN}</option>
+          <option value="jordan" ${d.owner==="jordan"?"selected":""}>${jordN}</option>
+        </select>
         <button class="btn" data-pay="${d.id}">Apply extra</button>
         <button class="btn" data-clear-extra="${d.id}">Clear extra</button>
       </td>
@@ -2175,7 +2181,7 @@ function debts() {
       <div class="tile" style="overflow-x:auto">
         <table class="table">
           <thead><tr>
-            <th>Name</th><th>Type</th><th>Owed</th><th>APR %</th><th>Min</th><th>Extra</th><th>Paying</th><th>Payoff</th><th></th>
+            <th>Name</th><th>Type</th><th>Owed</th><th>APR %</th><th>Min</th><th>Extra</th><th>Paying</th><th>Payoff</th><th>Whose</th>
           </tr></thead>
           <tbody>${g.rows.map(row).join("")}</tbody>
         </table>
@@ -2757,6 +2763,9 @@ function bindView() {
   });
   app.querySelectorAll("[data-debt-apr]").forEach(el => el.onchange = () => {
     patchDebt(el.dataset.debtApr, d => { d.apr = Math.max(0, Number(el.value || 0)); });
+  });
+  app.querySelectorAll("[data-debt-owner]").forEach(el => el.onchange = () => {
+    patchDebt(el.dataset.debtOwner, d => { d.owner = el.value; d.sharedWithPartner = el.value === "both"; });
   });
   app.querySelectorAll("[data-set-min]").forEach(el => el.onclick = () => {
     const d = (bag().debts || []).find(x => x.id === el.dataset.setMin);
