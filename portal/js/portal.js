@@ -597,6 +597,7 @@ function shared() {
         </div>
       </div>
     </div>
+    ${debtProgressTile()}
   `;
 }
 
@@ -748,6 +749,92 @@ function personalFeed(who) {
   };
 }
 
+function debtKindOf(d) {
+  const t = String(d.type || d.name || "").toLowerCase();
+  if (/student/.test(t) || /student/.test(d.name || "")) return "student";
+  if (/car|auto|vehicle/.test(t) || /car payment|auto/.test((d.name || "").toLowerCase())) return "auto";
+  if (/credit/.test(t)) return "card";
+  return "loan";
+}
+function ensureDebtTile() {
+  if (!state.debtTile) state.debtTile = { mode: "all", exclude: [] };
+  if (!Array.isArray(state.debtTile.exclude)) state.debtTile.exclude = [];
+}
+function debtStartBalance(d) {
+  const prevKey = shiftMonth(viewMonth, -1);
+  const snap = state.snapshots && state.snapshots[prevKey];
+  if (snap && snap.debts) {
+    const hit = snap.debts.find(x => String(x.id) === String(d.id));
+    if (hit) return Number(hit.balance || 0);
+  }
+  return Number(d.balance || 0);
+}
+function debtMonthMath(d) {
+  const start = debtStartBalance(d);
+  const apr = Number(d.apr || 0);
+  const interest = start > 0 && apr > 0 ? start * (apr / 100 / 12) : 0;
+  const min = Number(d.minimum || 0);
+  const extra = Number(d.extra || 0);
+  const paid = (d.minPaid ? min : 0) + extra;
+  const scheduled = Math.min(paid, start + interest);
+  const end = Math.max(0, start + interest - scheduled);
+  const drop = start - end;
+  return { start, interest, min, extra, paid: scheduled, end, drop };
+}
+function debtProgressTile() {
+  ensureDebtTile();
+  const mode = state.debtTile.mode || "all";
+  const exclude = new Set(state.debtTile.exclude || []);
+  const rows = visibleDebts().filter(d => {
+    if (exclude.has(String(d.id))) return false;
+    const k = debtKindOf(d);
+    if (mode === "card") return k === "card";
+    if (mode === "loan") return k === "loan" || k === "auto" || k === "student";
+    if (mode === "nocar") return k !== "auto" && k !== "student";
+    return true;
+  }).map(d => ({ d, k: debtKindOf(d), math: debtMonthMath(d) }));
+  const paid = rows.reduce((s, r) => s + r.math.paid, 0);
+  const interest = rows.reduce((s, r) => s + r.math.interest, 0);
+  const drop = rows.reduce((s, r) => s + r.math.drop, 0);
+  const hidden = visibleDebts().filter(d => exclude.has(String(d.id)));
+  const prevLabel = shiftMonth(viewMonth, -1);
+  const hasPrev = !!(state.snapshots && state.snapshots[prevLabel]);
+  return `
+    <div class="tile pdash-tile">
+      <div class="pdash-head">
+        <div>
+          <div class="label">Debts this month</div>
+          <div class="val" style="color:${drop>=0?"var(--good)":"var(--bad)"}">${drop>=0?"−":"+"}${heroMoney(Math.abs(drop))}</div>
+          <p class="note">Paid ${money(paid)} · interest ${money(interest)} · net balance change${hasPrev ? " vs " + prevLabel + " ending" : " (no prior snapshot)"}</p>
+        </div>
+        <div class="chips">
+          ${["all","card","loan","nocar"].map(m => `<button type="button" class="chip ${mode===m?"active":""}" data-debtmode="${m}">${m==="all"?"All":m==="card"?"Cards":m==="loan"?"Loans":"No car/student"}</button>`).join("")}
+        </div>
+      </div>
+      ${rows.length ? `<table class="table">
+        <thead><tr><th>Debt</th><th>Paid</th><th>Interest</th><th>Decrease</th><th></th></tr></thead>
+        <tbody>
+          ${rows.map(r => `<tr>
+            <td>${r.d.name}<div class="note">${r.d.type || r.k} · start ${money(r.math.start)} → ${money(r.math.end)}${r.math.extra ? " · extra " + money(r.math.extra) : ""}</div></td>
+            <td>${money(r.math.paid)}</td>
+            <td>${money(r.math.interest)}</td>
+            <td>${r.math.drop>=0?"−":"+"}${money(Math.abs(r.math.drop))}</td>
+            <td><button class="btn" data-debthide="${r.d.id}">Hide</button></td>
+          </tr>`).join("")}
+          <tr>
+            <td><strong>Net</strong></td>
+            <td><strong>${money(paid)}</strong></td>
+            <td><strong>${money(interest)}</strong></td>
+            <td><strong>${drop>=0?"−":"+"}${money(Math.abs(drop))}</strong></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>` : `<p class="note">No debts in this filter.</p>`}
+      ${hidden.length ? `<p class="note" style="margin-top:8px">Hidden: ${hidden.map(d => `<button class="btn" data-debtshow="${d.id}">${d.name}</button>`).join(" ")}</p>` : ""}
+      <p class="note">Interest is estimated from APR on last month’s ending balance. Hide student loans or a car if you only want revolving debt.</p>
+    </div>`;
+}
+
 function personal() {
   const who = user === "solo" ? "alex" : user;
   const mineAll = visibleTxs().filter(t => t.payer === who);
@@ -822,6 +909,7 @@ function personal() {
       </div>
     </div>
     <div class="pdash-under">
+      ${debtProgressTile()}
       ${feed.accounts}
       <div class="tile">
         <div class="label">Your share of household</div>
@@ -2324,6 +2412,25 @@ function bindView() {
   app.querySelectorAll("[data-dashmode]").forEach(el => el.onclick = () => {
     dashMode = el.dataset.dashmode;
     view = "dashboard";
+    render();
+  });
+  app.querySelectorAll("[data-debtmode]").forEach(el => el.onclick = () => {
+    ensureDebtTile();
+    state.debtTile.mode = el.dataset.debtmode;
+    save();
+    render();
+  });
+  app.querySelectorAll("[data-debthide]").forEach(el => el.onclick = () => {
+    ensureDebtTile();
+    const id = String(el.dataset.debthide);
+    if (!state.debtTile.exclude.includes(id)) state.debtTile.exclude.push(id);
+    save();
+    render();
+  });
+  app.querySelectorAll("[data-debtshow]").forEach(el => el.onclick = () => {
+    ensureDebtTile();
+    state.debtTile.exclude = state.debtTile.exclude.filter(x => x !== String(el.dataset.debtshow));
+    save();
     render();
   });
   app.querySelectorAll("[data-pd]").forEach(el => el.onclick = () => {
