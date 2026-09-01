@@ -285,6 +285,21 @@ function showAuth(on) {
   const gate = document.getElementById("authGate");
   if (gate) gate.hidden = !on;
 }
+function isPlaceholderName(n) {
+  return !n || /^(him|her|you|joint)$/i.test(String(n).trim());
+}
+function needsOnboard() {
+  if (!sbUser) return false;
+  if (!state.onboarded) state.onboarded = {};
+  if (state.onboarded[sbUser.id]) return false;
+  const seat = state.members && state.members[sbUser.id];
+  const nm = seat && state.users[seat] ? state.users[seat].name : "";
+  return isPlaceholderName(nm);
+}
+function showOnboard(on) {
+  const gate = document.getElementById("onboardGate");
+  if (gate) gate.hidden = !on;
+}
 
 async function bootAuth() {
   if (!sb) { render(); return; }
@@ -295,6 +310,7 @@ async function bootAuth() {
   await pullCloud(new URLSearchParams(location.search).get("join") || "");
   claimSeat();
   render();
+  showOnboard(needsOnboard());
 }
 
 let state = load();
@@ -450,11 +466,22 @@ function render() {
   });
   document.getElementById("modeLabel").textContent = user === "solo" ? "Individual" : "Couple household · " + (state.users[user] ? state.users[user].name : user);
   const us = document.getElementById("userSelect");
+  const whoName = document.getElementById("whoName");
+  const display = state.users[user] ? state.users[user].name : user;
   if (us) {
     us.value = user;
+    const alex = document.querySelector("#userSelect option[value=alex]");
+    const jord = document.querySelector("#userSelect option[value=jordan]");
+    if (alex) alex.textContent = state.users.alex ? state.users.alex.name : "Him";
+    if (jord) jord.textContent = state.users.jordan ? state.users.jordan.name : "Her";
     const locked = !!(sbUser && state.members && state.members[sbUser.id]);
     us.disabled = locked;
+    us.hidden = locked;
     us.title = locked ? "This login is locked to your seat" : "";
+    if (whoName) {
+      whoName.hidden = !locked;
+      whoName.textContent = display;
+    }
   }
   const ht = document.getElementById("headerTitle");
   if (ht) ht.textContent = viewMonthLabel();
@@ -3095,6 +3122,7 @@ document.getElementById("authIn") && (document.getElementById("authIn").onclick 
   await pullCloud(joinCodeFromForm());
   claimSeat();
   render();
+  showOnboard(needsOnboard());
 });
 document.getElementById("authUp") && (document.getElementById("authUp").onclick = async () => {
   if (!sb) return setAuthMsg("Supabase did not load.");
@@ -3112,6 +3140,7 @@ document.getElementById("authUp") && (document.getElementById("authUp").onclick 
   await pullCloud(joinCodeFromForm());
   claimSeat();
   render();
+  showOnboard(needsOnboard());
 });
 document.getElementById("authForgot") && (document.getElementById("authForgot").onclick = async () => {
   if (!sb) return setAuthMsg("Supabase did not load.");
@@ -3133,6 +3162,27 @@ if (sb) {
   });
 }
 
+document.getElementById("onboardSave") && (document.getElementById("onboardSave").onclick = async () => {
+  const msg = document.getElementById("onboardMsg");
+  const name = (document.getElementById("onboardName").value || "").trim();
+  const p1 = document.getElementById("onboardPass").value;
+  const p2 = document.getElementById("onboardPass2").value;
+  if (!name) { if (msg) msg.textContent = "Add your name."; return; }
+  if (p1.length < 6) { if (msg) msg.textContent = "Password needs 6+ characters."; return; }
+  if (p1 !== p2) { if (msg) msg.textContent = "Passwords do not match."; return; }
+  if (sb) {
+    const { error } = await sb.auth.updateUser({ password: p1, data: { display_name: name } });
+    if (error) { if (msg) msg.textContent = error.message; return; }
+  }
+  const seat = (sbUser && state.members && state.members[sbUser.id]) || user;
+  if (!state.users[seat]) state.users[seat] = { name: name, other: null };
+  else state.users[seat].name = name;
+  if (!state.onboarded) state.onboarded = {};
+  if (sbUser) state.onboarded[sbUser.id] = true;
+  save();
+  showOnboard(false);
+  render();
+});
 (function prefillJoin() {
   const code = new URLSearchParams(location.search).get("join");
   const el = document.getElementById("authJoin");

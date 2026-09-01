@@ -24,6 +24,18 @@
       <button class="btn" id="authForgot" type="button" style="margin-top:10px">Forgot password</button>
     </div>
   </div>
+  <div id="onboardGate" class="auth-gate" hidden>
+    <div class="auth-card">
+      <p class="kicker">Cove</p>
+      <h1>Finish your profile</h1>
+      <p class="note">This name shows in the top right. Set a password so you can sign in on your phone without the email link.</p>
+      <label class="note">Your name<input id="onboardName" placeholder="Alex" /></label>
+      <label class="note">Password<input id="onboardPass" type="password" autocomplete="new-password" /></label>
+      <label class="note">Confirm password<input id="onboardPass2" type="password" autocomplete="new-password" /></label>
+      <p class="note" id="onboardMsg"></p>
+      <button class="btn primary" id="onboardSave" type="button">Save and continue</button>
+    </div>
+  </div>
   <aside class="side">
     <a class="brand" href="../index.html"><span class="mark"></span>Cove</a>
     <button class="nav-btn active" data-view="dashboard">Dashboard</button>
@@ -46,6 +58,7 @@
       </div>
       <div class="who">
         <label class="note">Viewing as</label>
+        <strong id="whoName"></strong>
         <select id="userSelect">
           <option value="alex">Him</option>
           <option value="jordan">Her</option>
