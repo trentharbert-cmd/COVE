@@ -3,163 +3,136 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cove — See the month before it spends you</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <title>Cove Portal</title>
+  <link rel="stylesheet" href="css/portal.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <header class="nav">
-    <a class="brand" href="index.html"><span class="mark"></span>Cove</a>
-    <nav class="nav-links">
-      <a href="features.html">Features</a>
-      <a href="how-it-works.html">How it works</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="security.html">Security</a>
-      <a href="faq.html">FAQ</a>
-    </nav>
-    <a class="btn btn-copper" href="portal/index.html">Open the portal</a>
-  </header>
-
-  <main>
-    <section class="hero hero-glow">
-      <div class="wrap hero-grid">
-        <div>
-          <p class="eyebrow">Personal finance, without the lecture</p>
-          <h1>Your income. Your bills. What’s actually left.</h1>
-          <p class="lead">Cove is a portal for the month you are in. Track living costs, subscriptions, and debt minimums. Mark what’s paid. Watch planned net and live cashflow move — so extras and skipped subs don’t fake the leftover.</p>
-          <div class="hero-actions">
-            <a class="btn btn-copper" href="portal/index.html">Open the working portal</a>
-            <a class="btn btn-ghost" href="features.html">See what’s inside</a>
-          </div>
-          <p class="hero-fine">Prototype · manual entry · no bank login required to try it</p>
-        </div>
-        <aside class="preview" aria-hidden="true">
-          <div class="preview-top">
-            <span>Monthly expenses</span>
-            <span class="pill">Live demo</span>
-          </div>
-          <div class="stat-row stat-row-3">
-            <div class="stat"><span>Income</span><b>$5,500</b></div>
-            <div class="stat"><span>Unpaid</span><b>$1,701</b></div>
-            <div class="stat"><span>Cashflow</span><b>+$2,269</b></div>
-          </div>
-          <div class="mini-list">
-            <div class="mini-item"><span>Car payment</span><span>$470</span></div>
-            <div class="mini-item"><span>Subscriptions</span><span>$223</span></div>
-            <div class="mini-item"><span>OneMain min</span><span class="warn">$417</span></div>
-            <div class="mini-item"><span>Student loans</span><span>$188</span></div>
-            <div class="mini-item"><span>Utilities</span><span class="unpaid">$150</span></div>
-          </div>
-        </aside>
-      </div>
-    </section>
-
-    <div class="ticker">
-      <div class="wrap ticker-row">
-        <span>Income</span>
-        <span>Living costs</span>
-        <span>Subscriptions</span>
-        <span>Debt minimums</span>
-        <span>Paid / unpaid</span>
-        <span>Cashflow</span>
-        <span>Accounts</span>
+  <div id="authGate" class="auth-gate" hidden>
+    <div class="auth-card">
+      <p class="kicker">Cove</p>
+      <h1>Log in</h1>
+      <p class="note">This household saves to your account, not only this browser.</p>
+      <label class="note">Email<input id="authEmail" type="email" autocomplete="email" /></label>
+      <label class="note">Password<input id="authPass" type="password" autocomplete="current-password" /></label>
+      <p class="note" id="authMsg"></p>
+      <div class="row-actions">
+        <button class="btn primary" id="authIn" type="button">Log in</button>
+        <button class="btn" id="authUp" type="button">Create account</button>
       </div>
     </div>
+  </div>
+  <aside class="side">
+    <a class="brand" href="../index.html"><span class="mark"></span>Cove</a>
+    <button class="nav-btn active" data-view="shared">Shared dashboard</button>
+    <button class="nav-btn" data-view="personal">Personal</button>
+    <button class="nav-btn" data-view="transactions">Transactions</button>
+    <button class="nav-btn" data-view="monthly">Monthly expenses</button>
+    <button class="nav-btn" data-view="calendar">Due dates</button>
+    <button class="nav-btn" data-view="accounts">Accounts</button>
+    <button class="nav-btn" data-view="debts">Debts</button>
+    <button class="nav-btn" data-view="financials">Financials</button>
+    <button class="nav-btn" data-view="settings">Settings</button>
+    <div class="side-foot">Prototype · no live banks</div>
+  </aside>
 
-    <section>
-      <div class="wrap">
-        <p class="eyebrow">What it’s for</p>
-        <h2 class="section-title">A place to run the month, not a spreadsheet graveyard.</h2>
-        <p class="sub">Most money apps either hide the bills behind transactions or lecture you about lattes. Cove is the list you already keep — cars, meds, cards — with math that updates when you check something off.</p>
-        <div class="cards cards-4">
-          <article class="card">
-            <p class="eyebrow">01</p>
-            <h3>See the repeating load</h3>
-            <p>Living, subscriptions, and debt mins in separate bands. Not mixed in with last Tuesday’s coffee.</p>
-          </article>
-          <article class="card">
-            <p class="eyebrow">02</p>
-            <h3>Paid changes the leftover</h3>
-            <p>Mark a $25 min paid and unpaid drops $25. Cashflow moves. Extra on a debt does not fake the bill total.</p>
-          </article>
-          <article class="card">
-            <p class="eyebrow">03</p>
-            <h3>Debts belong next to bills</h3>
-            <p>Minimums, extras, payoff math. Change a min on Debts and Monthly expenses follows.</p>
-          </article>
-          <article class="card">
-            <p class="eyebrow">04</p>
-            <h3>A simple P&amp;L</h3>
-            <p>What came in, what the month costs, what you still owe. No accounting homework.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="alt">
-      <div class="wrap split">
-        <div>
-          <p class="eyebrow">How it feels</p>
-          <h2 class="section-title">Three numbers. Then the list.</h2>
-          <p class="sub">Income on the left. Unpaid in the middle. Planned net and live cashflow on the right — split so you can see the plan vs what you’ve actually sent out.</p>
-          <ul class="checks">
-            <li>Skip a sub this month and cashflow stays higher</li>
-            <li>Throw extra at a card without inflating monthly expenses</li>
-            <li>Start alone. Add a second login later if you ever want a shared view</li>
-          </ul>
-          <a class="btn btn-ghost" href="how-it-works.html">How setup works</a>
-        </div>
-        <div class="panel quote-panel">
-          <p class="quote">“I don’t need another bank login. I need to know if this month still works.”</p>
-          <p class="quote-meta">That’s the product.</p>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <p class="eyebrow">Setup</p>
-        <h2 class="section-title">Three moves. Then it’s your month.</h2>
-        <div class="cards">
-          <article class="card">
-            <p class="eyebrow">Step 1</p>
-            <h3>Add income</h3>
-            <p>Paycheck, recurring or not. Commission stays off the month until you add it.</p>
-          </article>
-          <article class="card">
-            <p class="eyebrow">Step 2</p>
-            <h3>Dump the repeating load</h3>
-            <p>Cars, meds, streaming, card minimums. Living, subs, and debts stay in their own bands.</p>
-          </article>
-          <article class="card">
-            <p class="eyebrow">Step 3</p>
-            <h3>Check things off</h3>
-            <p>Paid drops unpaid and live cashflow. Extra is extra — it only hits cashflow.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="cta-band">
-      <div class="wrap cta-inner">
-        <div>
-          <p class="eyebrow">Ready</p>
-          <h2 class="section-title">Stop rebuilding the month in Excel.</h2>
-          <p class="sub" style="margin-bottom:0">The portal is a working prototype. Click in and run a month.</p>
-        </div>
-        <a class="btn btn-copper" href="portal/index.html">Enter Cove</a>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="wrap foot">
-      <span>Cove · working prototype</span>
+  <section class="main">
+    <header class="top">
       <div>
-        <a href="pricing.html">Pricing</a> ·
-        <a href="security.html">Security</a> ·
-        <a href="portal/index.html">Portal</a>
+        <div class="kicker" id="modeLabel">Couple household</div>
+        <strong id="headerTitle">Month</strong>
+        <input id="monthPick" type="month" />
+      </div>
+      <div class="who">
+        <label class="note">Viewing as</label>
+        <select id="userSelect">
+          <option value="alex">Him</option>
+          <option value="jordan">Her</option>
+          <option value="solo">Solo (individual)</option>
+        </select>
+        <button class="btn" id="menuBtn" type="button">Menu</button>
+      </div>
+    </header>
+    <div class="content" id="app"></div>
+  </section>
+
+  <div class="modal-bg" id="modal">
+    <div class="modal">
+      <h2>Add transaction</h2>
+      <div class="fields">
+        <label>Name<input id="fName" placeholder="Groceries, rent..." /></label>
+        <label>Amount<input id="fAmt" type="number" step="0.01" placeholder="0.00" /></label>
+        <label>Date<input id="fDate" type="date" /></label>
+        <label>Due date (optional)<input id="fDue" type="date" /></label>
+        <label>Category
+          <select id="fCat">
+            <option>Groceries</option><option>Rent</option><option>Eating out</option>
+            <option>Utilities</option><option>Transport</option><option>Subscriptions</option>
+            <option>Fun</option><option>Health</option><option>Other</option>
+          </select>
+        </label>
+        <label>Type
+          <select id="fType"><option value="shared">Shared</option><option value="personal">Personal</option></select>
+        </label>
+        <label>Who paid
+          <select id="fPayer"><option value="alex">Him</option><option value="jordan">Her</option><option value="both">Joint</option></select>
+        </label>
+        <label>Split % for the other person<input id="fSplit" type="number" value="50" min="0" max="100" /></label>
+        <label>Paid?
+          <select id="fPaid"><option value="yes">Paid</option><option value="no">Unpaid</option></select>
+        </label>
+        <label>Account
+          <select id="fAcct"></select>
+        </label>
+        <label>Notes<textarea id="fNotes" rows="2"></textarea></label>
+      </div>
+      <div class="row-actions">
+        <button class="btn primary" id="saveTx">Save</button>
+        <button class="btn" id="cancelTx">Cancel</button>
       </div>
     </div>
-  </footer>
+  </div>
+
+  <div class="modal-bg" id="shareModal">
+    <div class="modal">
+      <h2>Add monthly expense</h2>
+      <div class="fields">
+        <label>Expense name<input id="sName" placeholder="Rent, electric, groceries..." /></label>
+        <label>Amount<input id="sAmt" type="number" step="0.01" placeholder="0.00" /></label>
+        <label>Due date<input id="sDue" type="date" /></label>
+        <label>How it's covered
+          <select id="sMode">
+            <option value="split">Split it</option>
+            <option value="assigned">One person pays this bill</option>
+          </select>
+        </label>
+        <label id="sPayerLabel">Who paid
+          <select id="sPayer"><option value="alex">Him</option><option value="jordan">Her</option><option value="both">Joint</option></select>
+        </label>
+        <label id="sSplitWrap">Their split % (other person)<input id="sSplit" type="number" value="50" min="0" max="100" /></label>
+        <label>Category
+          <select id="sCat">
+            <option>Rent</option><option>Utilities</option><option>Groceries</option>
+            <option>Eating out</option><option>Subscriptions</option><option>Health</option>
+            <option>Transport</option><option>Other</option>
+          </select>
+        </label>
+        <label>Paid?
+          <select id="sPaid"><option value="no">Unpaid</option><option value="yes">Paid</option></select>
+        </label>
+        <label>Household or personal
+          <select id="sType"><option value="shared">Shared household</option><option value="personal">Personal</option></select>
+        </label>
+        <label>Notes<textarea id="sNotes" rows="2"></textarea></label>
+      </div>
+      <div class="row-actions">
+        <button class="btn primary" id="saveShare">Save</button>
+        <button class="btn" id="cancelShare">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="js/portal.js"></script>
 </body>
 </html>
