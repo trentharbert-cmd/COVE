@@ -309,3 +309,10 @@ body.nav-open .nav-scrim { display: block; }
 @media (min-width: 701px) {
   .m-glance { grid-template-columns: repeat(3, 1fr); }
 }
+
+td.due-cell, .due-cell {
+  white-space: nowrap;
+  width: 1%;
+  min-width: 4.6ch;
+  font-variant-numeric: tabular-nums;
+}

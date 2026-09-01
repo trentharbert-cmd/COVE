@@ -696,7 +696,7 @@ function shared() {
         ${attention.length ? `<table class="table"><thead><tr><th>Expense</th><th>Amount</th><th>Due</th></tr></thead><tbody>
           ${attention.map(t => `<tr>
             <td>${t.name}</td><td>${money(t.amount)}</td>
-            <td>${shortDue(t.due)} · ${daysUntil(t.due) < 0 ? "overdue" : daysUntil(t.due) === 0 ? "today" : daysUntil(t.due) + "d"}</td>
+            <td class="due-cell">${shortDue(t.due)} · ${daysUntil(t.due) < 0 ? "overdue" : daysUntil(t.due) === 0 ? "today" : daysUntil(t.due) + "d"}</td>
           </tr>`).join("")}
         </tbody></table>` : `<p class="note">Nothing due this week.</p>`}
       </div>
@@ -1026,7 +1026,7 @@ function personal() {
       <div class="tile pdash-needs">
         <div class="label">Needs attention</div>
         ${unpaidItems.length ? `<table class="table"><thead><tr><th>Item</th><th>Amount</th><th>Due</th></tr></thead><tbody>
-          ${unpaidItems.map(x => `<tr><td>${x.name}</td><td>${money(x.amount)}</td><td>${shortDue(x.due)}</td></tr>`).join("")}
+          ${unpaidItems.map(x => `<tr><td>${x.name}</td><td>${money(x.amount)}</td><td class="due-cell">${shortDue(x.due)}</td></tr>`).join("")}
         </tbody></table>` : `<p class="note">Nothing open on your side.</p>`}
       </div>
       <div class="pdash-quad">
@@ -1112,7 +1112,7 @@ function expenses() {
           ${list.map(t => `<tr>
             <td>${t.name}<div class="note">${t.note || ""}</div></td>
             <td>${money(t.amount)}</td>
-            <td>${shortDue(t.due)}</td>
+            <td class="due-cell">${shortDue(t.due)}</td>
             <td>${state.users[t.payer]?.name || t.payer}</td>
             <td>${t.split === 0 || t.split === 100 ? "Assigned" : t.split + "% / " + (100 - t.split) + "%"}</td>
             <td>
@@ -1264,7 +1264,7 @@ function calendar() {
         <thead><tr><th>Due</th><th>Name</th><th>Type</th><th>Amount</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r => `<tr>
-            <td>${shortDue(r.due)}</td>
+            <td class="due-cell">${shortDue(r.due)}</td>
             <td>${r.name}</td>
             <td>${r.kind}</td>
             <td>${money(r.amount)}</td>
@@ -1830,7 +1830,7 @@ function monthly() {
   const monthRow = m => `<tr>
     <td>${m.name}</td>
     <td>${money(m.amount)}${isJointBill(m) ? `<div class="note">Your share ${money(monthShare(m))}</div>` : ""}</td>
-    <td>${shortDue(m.due)}</td>
+    <td class="due-cell">${shortDue(m.due)}</td>
     <td>${m.kind}</td>
     <td><span class="badge ${m.type}">${isJointBill(m) ? "shared" : m.type}</span></td>
     <td>${monthFilter === "shared" && isJointBill(m)
