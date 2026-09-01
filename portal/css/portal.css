@@ -247,3 +247,6 @@ h1 { font-family: var(--sans); font-size: 28px; font-weight: 600; letter-spacing
 @media (max-width: 980px) {
   .pdash-split { grid-template-columns: 1fr; }
 }
+
+.pdash-rail { margin-top: 12px; }
+.pdash-rail .pdash-split { grid-template-columns: 1fr; }

@@ -698,7 +698,6 @@ function personal() {
     <p class="kicker">Personal dashboard</p>
     <h1>${state.users[user].name}'s money</h1>
     ${emptyBanner()}
-    ${personalFeed(who)}
     <div class="grid-4">
       <div class="tile">
         <div class="label">Personal spend this month</div>
@@ -749,6 +748,7 @@ function personal() {
           <div class="bar"><span style="width:${Math.min(100, goal.saved / goal.target * 100)}%"></span></div>
         </div>` : ""}
         <p class="note" style="margin-top:12px">${hiddenN ? hiddenN + " personal account hidden from partner" : "Personal accounts visible to partner by default"}</p>
+        <div class="pdash-rail">${personalFeed(who)}</div>
       </div>
     </div>
   `;
