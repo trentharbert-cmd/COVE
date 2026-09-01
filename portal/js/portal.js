@@ -8,11 +8,16 @@ const seed = {
     solo: { name: "You", other: null }
   },
   accounts: [
-    { id: "a1", owner: "alex", name: "His Checking", type: "Checking", balance: 0, shared: false, hidden: false },
-    { id: "a2", owner: "jordan", name: "Her Checking", type: "Checking", balance: 0, shared: false, hidden: false },
-    { id: "a3", owner: "both", name: "Joint", type: "Checking", balance: 0, shared: true, hidden: false }
+    { id: "a1", owner: "alex", name: "Capital One Checking", last4: "2681", type: "Checking", balance: 2140, shared: false, hidden: false },
+    { id: "a2", owner: "jordan", name: "Chase Checking", last4: "0396", type: "Checking", balance: 1880, shared: false, hidden: false },
+    { id: "a3", owner: "both", name: "Joint Checking", last4: "4410", type: "Checking", balance: 620, shared: true, hidden: false }
   ],
-  txs: [],
+  txs: [
+    { id: "t1", name: "Trader Joe's", amount: 86.20, date: "2026-08-31", cat: "Groceries", type: "personal", payer: "alex", split: 0, paid: true, pending: false, accountId: "a1", notes: "" },
+    { id: "t2", name: "Sport Clips", amount: 40, date: "2026-08-31", cat: "Other", type: "personal", payer: "alex", split: 0, paid: true, pending: false, accountId: "a1", notes: "" },
+    { id: "t3", name: "Transfer to Savings", amount: 25, date: "2026-08-30", cat: "Other", type: "personal", payer: "alex", split: 0, paid: false, pending: true, accountId: "a1", notes: "" },
+    { id: "t4", name: "Costa Vida", amount: 14.17, date: "2026-08-30", cat: "Eating out", type: "personal", payer: "jordan", split: 0, paid: false, pending: true, accountId: "a2", notes: "" }
+  ],
   budgets: [
     { name: "Groceries", limit: 800, scope: "shared" }
   ],
@@ -253,6 +258,10 @@ let forecastLog = [];
 let forecastLogOpen = false;
 let finTab = "income";
 let finScope = "household";
+let pdUp = "out";
+let pdSub = "mo";
+let pdBill = "mo";
+let pdAcct = "breakdown";
 const PIE = ["#3ee0c5", "#5b8def", "#f07167", "#e7b34d", "#a78bfa", "#67e8f9", "#94a3b8", "#34d399", "#fb7185"];
 
 const app = document.getElementById("app");
@@ -504,6 +513,157 @@ function shared() {
   `;
 }
 
+function accountFor(item) {
+  // PLAID_TODO: live funding account + merchant logo from Plaid
+  if (item && item.accountId) {
+    const hit = (state.accounts || []).find(a => a.id === item.accountId);
+    if (hit) return hit;
+  }
+  const who = item && (item.owner === "both" || item.payer === "both") ? "both" : (item && (item.owner || item.payer));
+  return (state.accounts || []).find(a => a.owner === who) || (state.accounts || [])[0] || null;
+}
+function accountLine(item) {
+  // PLAID_TODO: last-4 and bank name from live Plaid account
+  const a = accountFor(item);
+  if (!a) return "Unassigned · looks only until Plaid";
+  return a.last4 ? `${a.name} ${a.last4}` : a.name;
+}
+function feedWhen(days) {
+  if (days < 0) return "Overdue";
+  if (days === 0) return "Today";
+  if (days === 1) return "In 1 day";
+  return "In " + days + " days";
+}
+function feedRow(name, sub, amount, pending) {
+  const init = String(name || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 1).toUpperCase() || "?";
+  return `<div class="feed-row">
+    <div class="feed-ico" title="Merchant logos after Plaid">${init}</div>
+    <div class="feed-main">
+      <div class="feed-name">${name}</div>
+      <div class="feed-sub">${sub}${pending ? " · Pending" : ""}</div>
+    </div>
+    <div class="feed-amt">${money(amount)}</div>
+  </div>`;
+}
+function chip(key, val, label, cur) {
+  return `<button type="button" class="chip ${cur===val?"active":""}" data-pd="${key}:${val}">${label}</button>`;
+}
+function personalFeed(who) {
+  const mineMonthly = visibleMonthly().filter(m => m.owner === who || isJointBill(m));
+  const outRows = [];
+  mineMonthly.forEach(m => {
+    if (monthPaidFor(m, who)) return;
+    const due = dueOnViewMonth(m.due);
+    const days = daysUntil(due);
+    if (days > 14) return;
+    outRows.push({ name: m.name, days, amount: monthShare(m, who), account: accountLine(m), pending: false });
+  });
+  visibleDebts().filter(d => Number(d.minimum) > 0 && !d.minPaid && Number(d.balance) > 0.05).forEach(d => {
+    const due = dueOnViewMonth("01");
+    const days = daysUntil(due);
+    if (days > 14) return;
+    outRows.push({ name: d.name, days, amount: Number(d.minimum), account: accountLine(d), pending: false });
+  });
+  outRows.sort((a, b) => a.days - b.days);
+  const inRows = (state.income || []).filter(i => i.owner === who || i.owner === "both").map(i => {
+    const due = dueOnViewMonth(i.due || "01");
+    return { name: i.name, days: daysUntil(due), amount: Number(i.amount || 0), account: accountLine(i), pending: false };
+  }).sort((a, b) => a.days - b.days);
+
+  const upList = pdUp === "in" ? inRows : outRows;
+  const upRows = upList.slice(0, 5).map(r => feedRow(r.name, feedWhen(r.days) + " · " + r.account, r.amount, r.pending)).join("")
+    || `<p class="note">${pdUp === "in" ? "No incoming this window." : "Nothing upcoming."}</p>`;
+
+  const subs = mineMonthly.filter(m => m.kind === "subscription" || m.kind === "membership");
+  const bills = mineMonthly.filter(m => m.kind !== "subscription" && m.kind !== "membership");
+  const debtBills = visibleDebts().filter(d => Number(d.minimum) > 0 && Number(d.balance) > 0.05).map(d => ({
+    name: d.name, amount: Number(d.minimum), account: accountLine(d)
+  }));
+  const billRows = bills.map(m => ({ name: m.name, amount: monthShare(m, who), account: accountLine(m) })).concat(debtBills);
+
+  const subMult = pdSub === "yr" ? 12 : 1;
+  const billMult = pdBill === "yr" ? 12 : 1;
+  const subTotal = subs.reduce((s, m) => s + monthShare(m, who), 0) * subMult;
+  const billTotal = billRows.reduce((s, r) => s + r.amount, 0) * billMult;
+
+  const subHtml = subs.slice(0, 5).map(m => feedRow(m.name, (pdSub === "yr" ? "Annual" : "Monthly") + " · " + accountLine(m), monthShare(m, who) * subMult)).join("")
+    || `<p class="note">No subscriptions on this view.</p>`;
+  const billHtml = billRows.slice(0, 5).map(r => feedRow(r.name, (pdBill === "yr" ? "Annual" : "Monthly") + " · " + r.account, r.amount * billMult)).join("")
+    || `<p class="note">No bills on this view.</p>`;
+
+  const recent = visibleTxs().filter(t => t.payer === who || t.type === "shared").slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5);
+  const recentHtml = recent.map(t => feedRow(t.name, (t.date || "") + " · " + accountLine(t), t.amount, t.pending || !t.paid)).join("")
+    || `<p class="note">No recent transactions. Manual until Plaid.</p>`;
+
+  const accts = visibleAccounts().filter(a => user === "solo" || a.owner === who || a.shared);
+  const acctTotal = accts.reduce((s, a) => s + Math.max(0, Number(a.balance || 0)), 0);
+  const pieRows = accts.map(a => [a.name + (a.last4 ? " " + a.last4 : ""), Math.max(0, Number(a.balance || 0))]).filter(r => r[1] > 0);
+  const pie = pieStyle(pieRows);
+  const allocHtml = pieRows.length ? `<div class="pie-wrap"><div class="pie" style="${pie}"></div><div>${pieRows.map((r, i) => {
+    const pct = acctTotal ? Math.round(r[1] / acctTotal * 100) : 0;
+    return `<div class="legend-row"><span><i class="swatch" style="background:${PIE[i % PIE.length]}"></i>${r[0]} · ${pct}%</span><strong>${money(r[1])}</strong></div>`;
+  }).join("")}</div></div>` : `<p class="note">No account balances yet. Looks-only until Plaid.</p>`;
+  const breakHtml = accts.length ? accts.map(a => {
+    const bal = Math.max(0, Number(a.balance || 0));
+    const pct = acctTotal ? Math.min(100, bal / acctTotal * 100) : 0;
+    return `<div class="acct-bar"><div class="legend-row"><span>${a.name}${a.last4 ? " " + a.last4 : ""}</span><strong>${money(bal)}</strong></div><div class="bar"><span style="width:${pct}%"></span></div></div>`;
+  }).join("") : `<p class="note">No accounts yet. Looks-only until Plaid.</p>`;
+
+  return `
+    <div class="pdash">
+      <div class="tile pdash-tile">
+        <div class="pdash-head">
+          <div class="label">Upcoming activity</div>
+          <div class="chips">${chip("up","out","Outgoing",pdUp)}${chip("up","in","Incoming",pdUp)}</div>
+        </div>
+        ${upRows}
+      </div>
+      <div class="grid-2 pdash-split">
+        <div class="tile pdash-tile">
+          <div class="pdash-head">
+            <div>
+              <div class="label">Subscriptions</div>
+              <div class="val">${heroMoney(subTotal)}</div>
+            </div>
+            <div class="chips">${chip("sub","mo","Monthly",pdSub)}${chip("sub","yr","Annual",pdSub)}</div>
+          </div>
+          ${subHtml}
+          <button class="btn feed-more" data-go="monthly">Show more</button>
+        </div>
+        <div class="tile pdash-tile">
+          <div class="pdash-head">
+            <div>
+              <div class="label">Bills</div>
+              <div class="val">${heroMoney(billTotal)}</div>
+            </div>
+            <div class="chips">${chip("bill","mo","Monthly",pdBill)}${chip("bill","yr","Annual",pdBill)}</div>
+          </div>
+          ${billHtml}
+          <button class="btn feed-more" data-go="monthly">Show more</button>
+        </div>
+      </div>
+      <div class="tile pdash-tile">
+        <div class="pdash-head">
+          <div class="label">Recent transactions</div>
+        </div>
+        ${recentHtml}
+        <button class="btn feed-more" data-go="transactions">Show more</button>
+        <p class="note">Merchant logos after Plaid. Account last-4 is looks-only until Plaid.</p>
+      </div>
+      <div class="tile pdash-tile">
+        <div class="pdash-head">
+          <div>
+            <div class="label">Accounts</div>
+            <div class="val">${heroMoney(acctTotal)}</div>
+          </div>
+          <div class="chips">${chip("acct","allocation","Allocation",pdAcct)}${chip("acct","breakdown","Breakdown",pdAcct)}</div>
+        </div>
+        ${pdAcct === "allocation" ? allocHtml : breakHtml}
+        <p class="note">Balances typed in Accounts. Live balances after Plaid.</p>
+      </div>
+    </div>`;
+}
+
 function personal() {
   const who = user === "solo" ? "alex" : user;
   const mineAll = visibleTxs().filter(t => t.payer === who);
@@ -537,7 +697,8 @@ function personal() {
   return `
     <p class="kicker">Personal dashboard</p>
     <h1>${state.users[user].name}'s money</h1>
-    ${emptyBanner()}${reminderStrip()}
+    ${emptyBanner()}
+    ${personalFeed(who)}
     <div class="grid-4">
       <div class="tile">
         <div class="label">Personal spend this month</div>
@@ -2068,6 +2229,14 @@ function settings() {
 
 function bindView() {
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
+  app.querySelectorAll("[data-pd]").forEach(el => el.onclick = () => {
+    const [k, v] = (el.dataset.pd || "").split(":");
+    if (k === "up") pdUp = v;
+    if (k === "sub") pdSub = v;
+    if (k === "bill") pdBill = v;
+    if (k === "acct") pdAcct = v;
+    render();
+  });
   app.querySelectorAll("[data-txtab]").forEach(el => el.onclick = () => { txTab = el.dataset.txtab; render(); });
   app.querySelectorAll("[data-period]").forEach(el => el.onclick = () => { spendPeriod = el.dataset.period; render(); });
   app.querySelectorAll("[data-filter]").forEach(el => el.onclick = () => { expenseFilter = el.dataset.filter; render(); });
