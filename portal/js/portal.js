@@ -631,7 +631,7 @@ function mobileDash() {
     <div class="row-actions">
       <button class="btn primary" data-capture="tx">Add spend</button>
       <button class="btn" data-go="monthly">Bills</button>
-      <button class="btn" data-go="debts">Debts</button>
+      <button class="btn" data-go="accounts">Accounts</button>
     </div>
     <div class="tile">
       <div class="label">Decide next</div>
@@ -1336,7 +1336,7 @@ function accounts() {
     <h1>Accounts</h1>
     <p class="note">Visible to partner by default. Hide only if you want it off their screen.</p>
     <div class="row-actions">
-      <button class="btn primary" id="plaidConnect" type="button">Connect bank (sandbox)</button>
+      <button class="btn primary plaid-connect" type="button">Connect bank (sandbox)</button>
       <span class="note" id="plaidMsg"></span>
     </div>
     <div class="grid-3">
@@ -2577,6 +2577,12 @@ function settings() {
         ${sbUser ? `<button class="btn" id="authOut">Log out</button>` : `<p class="note">Viewing as ${user === "solo" ? "Solo" : state.users[user].name}.</p>`}
       </div>
       <div class="tile">
+        <h3>Plaid sandbox</h3>
+        <p class="note">Use a second email so this household is not overwritten. Sandbox banks only (user_good / pass_good).</p>
+        <button class="btn primary plaid-connect" type="button">Connect bank (sandbox)</button>
+        <p class="note" id="plaidMsg"></p>
+      </div>
+      <div class="tile">
         <h3>Invite partner</h3>
         <p class="note">They open this link, create an account, and land in this household. You are ${state.users[user] ? state.users[user].name : user} on this login.</p>
         <p><strong id="inviteCodeLabel">${inviteCode || "No code yet — run supabase-setup.sql"}</strong></p>
@@ -2634,8 +2640,7 @@ function settings() {
 }
 
 function bindView() {
-  const plaidConnect = document.getElementById("plaidConnect");
-  if (plaidConnect) plaidConnect.onclick = startPlaidSandbox;
+  app.querySelectorAll(".plaid-connect").forEach(el => el.onclick = startPlaidSandbox);
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
   app.querySelectorAll("[data-capture]").forEach(el => el.onclick = () => {
     if (el.dataset.capture === "tx") openTxModal(null);
