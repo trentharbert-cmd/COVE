@@ -1286,6 +1286,40 @@ function calendar() {
   `;
 }
 
+function applyPlaidDebts(rows) {
+  if (!state.debts) state.debts = [];
+  const who = viewerId();
+  (rows || []).forEach(d => {
+    const id = d.id || ("plaid-debt-" + Date.now());
+    const existing = state.debts.find(x => x.id === id);
+    const row = {
+      id,
+      name: d.name || "Plaid debt",
+      type: d.type || "Credit card",
+      balance: Number(d.balance || 0),
+      original: Number(d.balance || 0),
+      minimum: Number(d.minimum || 0),
+      extra: existing ? Number(existing.extra || 0) : 0,
+      apr: Number(d.apr || 0),
+      owner: who,
+      due: d.due || null
+    };
+    if (existing) Object.assign(existing, { balance: row.balance, minimum: row.minimum, apr: row.apr, due: row.due, type: row.type });
+    else state.debts.push(row);
+  });
+}
+function applyPlaidIncome(rows) {
+  if (!state.income) state.income = [];
+  const who = viewerId();
+  (rows || []).forEach(i => {
+    if (!(Number(i.amount) > 0)) return;
+    const id = i.id || ("plaid-inc-" + Date.now());
+    const existing = state.income.find(x => x.id === id);
+    const row = { id, name: i.name || "Pay", amount: Number(i.amount || 0), owner: who, recurring: true };
+    if (existing) Object.assign(existing, row);
+    else state.income.push(row);
+  });
+}
 function applyPlaidTxs(rows) {
   if (!state.txs) state.txs = [];
   const who = viewerId();
@@ -1319,6 +1353,8 @@ async function refreshPlaidTxs() {
   const { data, error } = await sb.functions.invoke("plaid-transactions", { body: { access_token: token } });
   if (error || !data) { if (msg) msg.textContent = (data && data.error) || (error && error.message) || "Refresh failed."; return; }
   applyPlaidTxs(data.transactions || []);
+  applyPlaidDebts(data.debts || []);
+  applyPlaidIncome(data.income || []);
   save();
   if (msg) msg.textContent = (data.transactions || []).length ? "Loaded " + data.transactions.length + " transactions." : (data.tx_error || "No transactions yet. Wait and refresh.");
   render();
@@ -1360,6 +1396,8 @@ async function startPlaidSandbox() {
         });
       });
       applyPlaidTxs(ex.data.transactions || []);
+      applyPlaidDebts(ex.data.debts || []);
+      applyPlaidIncome(ex.data.income || []);
       save();
       if (msg) msg.textContent = (ex.data.transactions || []).length
         ? "Sandbox bank + " + ex.data.transactions.length + " transactions."

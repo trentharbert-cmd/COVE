@@ -105,11 +105,93 @@ Deno.serve(async (req) => {
       last4: maskById[String(t.account_id || "")] || "",
     }));
 
+    const liabRes = await fetch("https://sandbox.plaid.com/liabilities/get", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, secret, access_token: exJson.access_token }),
+    });
+    const liabJson = await liabRes.json();
+    const nameById: Record<string, string> = {};
+    accounts.forEach((a) => { nameById[a.id] = a.name; });
+    const debts: Record<string, unknown>[] = [];
+    const L = liabJson.liabilities || {};
+    (L.credit || []).forEach((c: Record<string, unknown>) => {
+      const aid = String(c.account_id || "");
+      debts.push({
+        id: "plaid-debt-" + aid,
+        name: nameById[aid] || "Credit card",
+        type: "Credit card",
+        balance: Number(c.last_statement_balance ?? c.current_balance ?? 0),
+        minimum: Number(c.minimum_payment_amount || 0),
+        apr: Number((c.aprs as { purchase_apr?: number } | undefined)?.purchase_apr || 0),
+        due: c.next_payment_due_date || null,
+      });
+    });
+    (L.student || []).forEach((s: Record<string, unknown>) => {
+      const aid = String(s.account_id || "");
+      debts.push({
+        id: "plaid-debt-" + aid,
+        name: nameById[aid] || String(s.loan_name || "Student loan"),
+        type: "Loan",
+        balance: Number(s.outstanding_interest_amount != null ? s.last_payment_amount : 0) || Number(s.ytd_interest_paid || 0),
+        minimum: Number(s.minimum_payment_amount || 0),
+        apr: Number(s.interest_rate_percentage || 0),
+        due: s.next_payment_due_date || s.expected_payoff_date || null,
+      });
+    });
+    (L.mortgage || []).forEach((m: Record<string, unknown>) => {
+      const aid = String(m.account_id || "");
+      debts.push({
+        id: "plaid-debt-" + aid,
+        name: nameById[aid] || "Mortgage",
+        type: "Loan",
+        balance: Number(m.current_late_fee != null ? 0 : 0),
+        minimum: Number(m.next_monthly_payment || 0),
+        apr: Number(m.interest_rate?.percentage || 0),
+        due: m.next_payment_due_date || null,
+      });
+    });
+    // Prefer account balances for owed when liability payload is thin
+    accounts.filter((a) => /credit|loan|mortgage/i.test(a.type)).forEach((a) => {
+      if (debts.some((d) => String(d.id) === "plaid-debt-" + a.id)) return;
+      debts.push({
+        id: "plaid-debt-" + a.id,
+        name: a.name,
+        type: /credit/i.test(a.type) ? "Credit card" : "Loan",
+        balance: a.balance,
+        minimum: 0,
+        apr: 0,
+        due: null,
+      });
+    });
+    debts.forEach((d) => {
+      const acc = accounts.find((a) => "plaid-debt-" + a.id === String(d.id));
+      if (acc && Number(acc.balance)) d.balance = acc.balance;
+    });
+
+    let income: Record<string, unknown>[] = [];
+    const rec = await fetch("https://sandbox.plaid.com/transactions/recurring/get", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, secret, access_token: exJson.access_token }),
+    });
+    const recJson = await rec.json();
+    if (rec.ok) {
+      income = (recJson.inflow_streams || []).map((s: Record<string, unknown>) => ({
+        id: "plaid-inc-" + String(s.stream_id || ""),
+        name: String(s.merchant_name || s.description || "Income"),
+        amount: Number(s.last_amount || s.average_amount || 0),
+        recurring: true,
+      }));
+    }
+
     return Response.json({
       item_id: exJson.item_id,
       access_token: exJson.access_token,
       accounts,
       transactions: txs,
+      debts,
+      income,
       tx_error: lastErr || null,
     }, { headers: cors });
   } catch (e) {
