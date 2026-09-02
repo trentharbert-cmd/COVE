@@ -1284,6 +1284,43 @@ function calendar() {
   `;
 }
 
+function applyPlaidTxs(rows) {
+  if (!state.txs) state.txs = [];
+  const who = viewerId();
+  (rows || []).forEach(t => {
+    if (t.inflow) return;
+    const id = t.id || ("plaid-" + Date.now());
+    const existing = state.txs.find(x => x.id === id);
+    const row = {
+      id,
+      name: t.name || "Plaid",
+      amount: Number(t.amount || 0),
+      date: t.date,
+      cat: suggestCategory(t.name) !== "Other" ? suggestCategory(t.name) : (t.cat || "Other"),
+      type: "personal",
+      payer: who,
+      split: 0,
+      paid: !t.pending,
+      pending: !!t.pending,
+      accountId: t.accountId || "",
+      notes: t.last4 ? "Plaid · " + t.last4 : "Plaid"
+    };
+    if (existing) Object.assign(existing, row);
+    else state.txs.push(row);
+  });
+}
+async function refreshPlaidTxs() {
+  const msg = document.getElementById("plaidMsg");
+  const token = (state.plaid || []).slice(-1)[0] && (state.plaid || []).slice(-1)[0].access_token;
+  if (!token || !sb) { if (msg) msg.textContent = "Connect a sandbox bank first."; return; }
+  if (msg) msg.textContent = "Refreshing…";
+  const { data, error } = await sb.functions.invoke("plaid-transactions", { body: { access_token: token } });
+  if (error || !data) { if (msg) msg.textContent = (data && data.error) || (error && error.message) || "Refresh failed."; return; }
+  applyPlaidTxs(data.transactions || []);
+  save();
+  if (msg) msg.textContent = (data.transactions || []).length ? "Loaded " + data.transactions.length + " transactions." : (data.tx_error || "No transactions yet. Wait and refresh.");
+  render();
+}
 async function startPlaidSandbox() {
   const msg = document.getElementById("plaidMsg");
   if (!sb || !sbUser) { if (msg) msg.textContent = "Log in first."; return; }
@@ -1307,6 +1344,7 @@ async function startPlaidSandbox() {
       if (!state.plaid) state.plaid = [];
       state.plaid.push({ item_id: ex.data.item_id, access_token: ex.data.access_token, at: new Date().toISOString() });
       (ex.data.accounts || []).forEach(a => {
+        if ((state.accounts || []).some(x => x.id === a.id)) return;
         state.accounts.push({
           id: a.id || ("plaid" + Date.now()),
           owner: viewerId(),
@@ -1319,8 +1357,11 @@ async function startPlaidSandbox() {
           plaid: true
         });
       });
+      applyPlaidTxs(ex.data.transactions || []);
       save();
-      if (msg) msg.textContent = "Sandbox bank connected.";
+      if (msg) msg.textContent = (ex.data.transactions || []).length
+        ? "Sandbox bank + " + ex.data.transactions.length + " transactions."
+        : (ex.data.tx_error ? "Accounts saved. Transactions not ready — tap Refresh." : "Sandbox bank connected.");
       render();
     },
     onExit: (err) => {
@@ -1337,6 +1378,7 @@ function accounts() {
     <p class="note">Visible to partner by default. Hide only if you want it off their screen.</p>
     <div class="row-actions">
       <button class="btn primary plaid-connect" type="button">Connect bank (sandbox)</button>
+      <button class="btn" id="plaidRefresh" type="button">Refresh transactions</button>
       <span class="note" id="plaidMsg"></span>
     </div>
     <div class="grid-3">
@@ -2641,6 +2683,8 @@ function settings() {
 
 function bindView() {
   app.querySelectorAll(".plaid-connect").forEach(el => el.onclick = startPlaidSandbox);
+  const plaidRefresh = document.getElementById("plaidRefresh");
+  if (plaidRefresh) plaidRefresh.onclick = refreshPlaidTxs;
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
   app.querySelectorAll("[data-capture]").forEach(el => el.onclick = () => {
     if (el.dataset.capture === "tx") openTxModal(null);

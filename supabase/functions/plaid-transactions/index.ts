@@ -18,57 +18,22 @@ Deno.serve(async (req) => {
     if (userErr || !userData.user) {
       return Response.json({ error: "Not signed in" }, { status: 401, headers: cors });
     }
-
     const clientId = Deno.env.get("PLAID_CLIENT_ID") || "";
     const secret = Deno.env.get("PLAID_SECRET") || "";
     const body = await req.json();
-    const publicToken = String(body.public_token || "");
-    if (!publicToken) return Response.json({ error: "Missing public_token" }, { status: 400, headers: cors });
-
-    const ex = await fetch("https://sandbox.plaid.com/item/public_token/exchange", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, secret, public_token: publicToken }),
-    });
-    const exJson = await ex.json();
-    if (!ex.ok) {
-      return Response.json({ error: exJson.error_message || "Exchange failed" }, { status: 400, headers: cors });
-    }
-
-    const ac = await fetch("https://sandbox.plaid.com/accounts/get", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, secret, access_token: exJson.access_token }),
-    });
-    const acJson = await ac.json();
-    if (!ac.ok) {
-      return Response.json({ error: acJson.error_message || "Accounts failed" }, { status: 400, headers: cors });
-    }
-
-    const accounts = (acJson.accounts || []).map((a: Record<string, unknown>) => ({
-      id: String(a.account_id || ""),
-      name: String(a.name || a.official_name || "Account"),
-      last4: String(a.mask || ""),
-      type: String(a.subtype || a.type || "Checking"),
-      balance: Number((a.balances as { current?: number } | undefined)?.current || 0),
-      plaid: true,
-    }));
-
-    const maskById: Record<string, string> = {};
-    accounts.forEach((a) => { if (a.id) maskById[a.id] = a.last4; });
+    const access_token = String(body.access_token || "");
+    if (!access_token) return Response.json({ error: "Missing access_token" }, { status: 400, headers: cors });
 
     await fetch("https://sandbox.plaid.com/transactions/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, secret, access_token: exJson.access_token }),
+      body: JSON.stringify({ client_id: clientId, secret, access_token }),
     });
 
     const end = new Date();
     const start = new Date(end.getTime() - 120 * 86400000);
-    const start_date = start.toISOString().slice(0, 10);
-    const end_date = end.toISOString().slice(0, 10);
-    let transactions: Record<string, unknown>[] = [];
     let lastErr = "";
+    let transactions: Record<string, unknown>[] = [];
     for (let attempt = 0; attempt < 4; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 2500));
       const tx = await fetch("https://sandbox.plaid.com/transactions/get", {
@@ -77,18 +42,14 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           client_id: clientId,
           secret,
-          access_token: exJson.access_token,
-          start_date,
-          end_date,
+          access_token,
+          start_date: start.toISOString().slice(0, 10),
+          end_date: end.toISOString().slice(0, 10),
           options: { count: 250, offset: 0 },
         }),
       });
       const txJson = await tx.json();
-      if (tx.ok) {
-        transactions = txJson.transactions || [];
-        lastErr = "";
-        break;
-      }
+      if (tx.ok) { transactions = txJson.transactions || []; lastErr = ""; break; }
       lastErr = txJson.error_code || txJson.error_message || "transactions failed";
       if (txJson.error_code !== "PRODUCT_NOT_READY") break;
     }
@@ -98,20 +59,12 @@ Deno.serve(async (req) => {
       name: String(t.merchant_name || t.name || "Plaid"),
       amount: Math.abs(Number(t.amount || 0)),
       inflow: Number(t.amount || 0) < 0,
-      date: String(t.date || end_date),
+      date: String(t.date || end.toISOString().slice(0, 10)),
       cat: Array.isArray(t.category) && t.category[0] ? String(t.category[0]) : "Other",
       pending: !!t.pending,
       accountId: String(t.account_id || ""),
-      last4: maskById[String(t.account_id || "")] || "",
     }));
-
-    return Response.json({
-      item_id: exJson.item_id,
-      access_token: exJson.access_token,
-      accounts,
-      transactions: txs,
-      tx_error: lastErr || null,
-    }, { headers: cors });
+    return Response.json({ transactions: txs, tx_error: lastErr || null }, { headers: cors });
   } catch (e) {
     return Response.json({ error: String(e) }, { status: 500, headers: cors });
   }
