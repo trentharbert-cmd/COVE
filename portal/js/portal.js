@@ -1233,6 +1233,8 @@ function transactions() {
       <button class="btn ${spendPeriod==="last"?"active":""}" data-period="last">Last month</button>
       <button class="btn ${spendPeriod==="ytd"?"active":""}" data-period="ytd">Year to date</button>
       <button class="btn primary" id="addTxPage">Add transaction</button>
+      <button class="btn plaid-refresh" type="button">Refresh Plaid</button>
+      <span class="note" id="plaidMsg"></span>
     </div>
     <p class="note">${periodLabel(spendPeriod)}</p>
     ${txTab === "analysis" ? analysisView(list) : `
@@ -1378,7 +1380,7 @@ function accounts() {
     <p class="note">Visible to partner by default. Hide only if you want it off their screen.</p>
     <div class="row-actions">
       <button class="btn primary plaid-connect" type="button">Connect bank (sandbox)</button>
-      <button class="btn" id="plaidRefresh" type="button">Refresh transactions</button>
+      <button class="btn plaid-refresh" type="button">Refresh transactions</button>
       <span class="note" id="plaidMsg"></span>
     </div>
     <div class="grid-3">
@@ -2683,8 +2685,7 @@ function settings() {
 
 function bindView() {
   app.querySelectorAll(".plaid-connect").forEach(el => el.onclick = startPlaidSandbox);
-  const plaidRefresh = document.getElementById("plaidRefresh");
-  if (plaidRefresh) plaidRefresh.onclick = refreshPlaidTxs;
+  app.querySelectorAll(".plaid-refresh").forEach(el => el.onclick = refreshPlaidTxs);
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
   app.querySelectorAll("[data-capture]").forEach(el => el.onclick = () => {
     if (el.dataset.capture === "tx") openTxModal(null);
