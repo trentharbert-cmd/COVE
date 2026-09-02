@@ -1284,11 +1284,61 @@ function calendar() {
   `;
 }
 
+async function startPlaidSandbox() {
+  const msg = document.getElementById("plaidMsg");
+  if (!sb || !sbUser) { if (msg) msg.textContent = "Log in first."; return; }
+  if (typeof Plaid === "undefined") { if (msg) msg.textContent = "Plaid script did not load."; return; }
+  if (msg) msg.textContent = "Opening sandbox…";
+  const { data, error } = await sb.functions.invoke("plaid-link", { body: {} });
+  if (error || !data || !data.link_token) {
+    if (msg) msg.textContent = (data && data.error) || (error && error.message) || "Deploy plaid-link and set PLAID secrets.";
+    return;
+  }
+  const handler = Plaid.create({
+    token: data.link_token,
+    onSuccess: async (public_token) => {
+      if (msg) msg.textContent = "Saving accounts…";
+      const ex = await sb.functions.invoke("plaid-exchange", { body: { public_token } });
+      if (ex.error || !ex.data || !ex.data.accounts) {
+        if (msg) msg.textContent = (ex.data && ex.data.error) || (ex.error && ex.error.message) || "Exchange failed.";
+        return;
+      }
+      if (!state.accounts) state.accounts = [];
+      if (!state.plaid) state.plaid = [];
+      state.plaid.push({ item_id: ex.data.item_id, access_token: ex.data.access_token, at: new Date().toISOString() });
+      (ex.data.accounts || []).forEach(a => {
+        state.accounts.push({
+          id: a.id || ("plaid" + Date.now()),
+          owner: viewerId(),
+          name: a.name,
+          last4: a.last4,
+          type: /credit/i.test(a.type) ? "Credit card" : /sav/i.test(a.type) ? "Savings" : "Checking",
+          balance: Number(a.balance || 0),
+          shared: false,
+          hidden: false,
+          plaid: true
+        });
+      });
+      save();
+      if (msg) msg.textContent = "Sandbox bank connected.";
+      render();
+    },
+    onExit: (err) => {
+      if (msg) msg.textContent = err ? (err.display_message || err.error_message || "Closed") : "";
+    }
+  });
+  handler.open();
+}
+
 function accounts() {
   return `
     <p class="kicker">Where money sits</p>
     <h1>Accounts</h1>
     <p class="note">Visible to partner by default. Hide only if you want it off their screen.</p>
+    <div class="row-actions">
+      <button class="btn primary" id="plaidConnect" type="button">Connect bank (sandbox)</button>
+      <span class="note" id="plaidMsg"></span>
+    </div>
     <div class="grid-3">
       ${visibleAccounts().map(a => `
         <div class="tile">
@@ -2584,6 +2634,8 @@ function settings() {
 }
 
 function bindView() {
+  const plaidConnect = document.getElementById("plaidConnect");
+  if (plaidConnect) plaidConnect.onclick = startPlaidSandbox;
   app.querySelectorAll("[data-go]").forEach(el => el.onclick = () => { view = el.dataset.go; render(); });
   app.querySelectorAll("[data-capture]").forEach(el => el.onclick = () => {
     if (el.dataset.capture === "tx") openTxModal(null);
